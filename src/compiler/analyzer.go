@@ -45,7 +45,7 @@ func AnalyzeFile(ast File, pathh string) (*SymbolTable, map[string]*SymbolTable,
 	s.addSymbol(UptrToken, UptrType)
 
 	s.addSymbol(VoidToken, VoidType)
-	s.addSymbol(SSizeTToken, SSizeTType)
+	s.addSymbol(SizeTToken, SizeTType)
 	s.addSymbol(BoolToken, BoolType)
 
 	s.addSymbol(True.Value, BoolType.Type)
@@ -113,6 +113,8 @@ func (s *SemanticAnalyzer) stmt(stmt Statement, returnType Type) {
 		s.ifElse(stmt.(IfElseBlock), returnType)
 	case Loop:
 		s.loop(stmt.(Loop), returnType)
+	case Typedef:
+		s.typedef(stmt.(Typedef))
 	case Switch:
 		s.swtch(stmt.(Switch), returnType)
 	case Block:
@@ -514,9 +516,6 @@ func (s *SemanticAnalyzer) callExpr(expr CallExpr) {
 			case PointerType:
 				l++
 				Args = append([]Expression{UnaryExpr{Expr: base, Op: Token{Buff: []byte("*"), PrimaryType: AirthmaticOperator, SecondaryType: Mul}}}, expr.Args...)
-			case DynamicType:
-				l++
-				Args = append([]Expression{UnaryExpr{Expr: base, Op: Token{Buff: []byte("*"), PrimaryType: AirthmaticOperator, SecondaryType: Mul}}}, expr.Args...)
 			}
 		case PointerType:
 			typ3 := s.getRootType(first.(PointerType).BaseType)
@@ -530,11 +529,14 @@ func (s *SemanticAnalyzer) callExpr(expr CallExpr) {
 				case PointerType:
 					l++
 					Args = append([]Expression{base}, expr.Args...)
-				case DynamicType:
-					l++
-					Args = append([]Expression{base}, expr.Args...)
 				}
+			case VecType:
+				l++
+				Args = append([]Expression{UnaryExpr{Expr: base, Op: Token{Buff: []byte("*"), PrimaryType: AirthmaticOperator, SecondaryType: Mul}}}, expr.Args...)
 			}
+		case VecType:
+			l++
+			Args = append([]Expression{base}, expr.Args...)
 		}
 	}
 
@@ -561,7 +563,8 @@ func (s *SemanticAnalyzer) arrayMemberExpr(expr ArrayMemberExpr) {
 	case ArrayType:
 	case ImplictArrayType:
 	case PointerType:
-	case DynamicType:
+	case VecType:
+	case TupleType:
 		break
 	default:
 		s.error("Type mismatch: expected an array type, got {Typ}.", Typ.LineM(), Typ.ColumnM())
@@ -668,6 +671,10 @@ func (s *SemanticAnalyzer) compoundLiteral(cl CompoundLiteral) {
 				s.error("Type mismatch: tuple has type {Type2} at index {x} but got {Type1}.", val.LineM(), val.ColumnM())
 			}
 		}
+	case VecType:
+	case ArrayType:
+	case ImplictArrayType:
+		break
 	default:
 		s.error("Invalid type in compound literal. Expected struct or tuple type, got {Typ}.", Typ.LineM(), Typ.ColumnM())
 	}
@@ -719,8 +726,6 @@ func (s *SemanticAnalyzer) typ(typ Type) {
 		s.expr(typ.(BasicType).Expr)
 	case PointerType:
 		s.typ(typ.(PointerType).BaseType)
-	case DynamicType:
-		s.typ(typ.(DynamicType).BaseType)
 	case CaptureType:
 		s.typ(typ.(CaptureType).BaseType)
 	case StaticType:
@@ -864,8 +869,6 @@ func (s *SemanticAnalyzer) getType(expr Expression) Type {
 			switch Typ.(type) {
 			case PointerType:
 				return Typ.(PointerType).BaseType
-			case DynamicType:
-				return Typ.(DynamicType).BaseType
 			}
 			s.error("{expr} is not a pointer.", expr.LineM(), expr.ColumnM())
 		} else if expr.(UnaryExpr).Op.SecondaryType == And {
@@ -893,13 +896,8 @@ func (s *SemanticAnalyzer) getType(expr Expression) Type {
 			return Typ.(ImplictArrayType).BaseType
 		case PointerType:
 			return Typ.(PointerType).BaseType
-		case DynamicType:
-			switch Typ.(DynamicType).BaseType.(type) {
-			case ImplictArrayType:
-				return Typ.(DynamicType).BaseType.(ImplictArrayType).BaseType
-			default:
-				return Typ.(DynamicType).BaseType
-			}
+		case VecType:
+			return Typ.(VecType).BaseType
 		}
 		return Typ
 	case FuncExpr:
@@ -939,51 +937,103 @@ func (s *SemanticAnalyzer) getType(expr Expression) Type {
 		switch Typ.(type) {
 		case PointerType:
 			Typ = Typ.(PointerType).BaseType
-		case DynamicType:
-			Typ = Typ.(DynamicType).BaseType
 		case Typedef:
 			return Typ.(Typedef).Type // only happens with enums
-		}
-
-		switch Typ.(BasicType).Expr.(type) {
-		case MemberExpr:
-			if t, ok := s.Imports[string(Typ.(BasicType).Expr.(MemberExpr).Base.(IdentExpr).Value.Buff)]; ok {
-				isImported = true
-				table = t
-				base = Typ.(BasicType).Expr.(MemberExpr).Base
-			}
 		}
 
 		Typ7 := s.getRootType(Typ)
 
 		switch Typ7.(type) {
-		case StructType:
-			if isImported {
-				Typ8 := Typ7.(StructType)
-				Typ9 := StructType{}
-				Typ9.Props = Typ8.Props
-				Typ9.SuperStructs = make([]Expression, len(Typ8.SuperStructs))
-
-				for i, e := range Typ8.SuperStructs {
-					switch e.(type) {
-					case IdentExpr:
-						Typ9.SuperStructs[i] = MemberExpr{Base: base, Prop: e.(IdentExpr).Value}
-					default:
-						Typ9.SuperStructs[i] = e
-					}
+		case BasicType:
+			switch Typ7.(BasicType).Expr.(type) {
+			case MemberExpr:
+				t, ok := s.Imports[string(Typ.(BasicType).Expr.(MemberExpr).Base.(IdentExpr).Value.Buff)]
+				if !ok {
+					break
 				}
-				return s.ofNamespace(s.getPropType(expr.(MemberExpr).Prop, Typ9), base, table)
+				isImported = true
+				table = t
+				base = Typ7.(BasicType).Expr.(MemberExpr).Base
 			}
-			return s.getPropType(expr.(MemberExpr).Prop, Typ7.(StructType))
+		}
+
+		switch Typ7.(type) {
+		case StructType:
+			if !isImported {
+				return s.getPropType(expr.(MemberExpr).Prop, Typ7.(StructType))
+			}
+			Typ8 := Typ7.(StructType)
+			Typ9 := StructType{}
+			Typ9.Props = Typ8.Props
+			Typ9.SuperStructs = make([]Expression, len(Typ8.SuperStructs))
+
+			for i, e := range Typ8.SuperStructs {
+				switch e.(type) {
+				case IdentExpr:
+					Typ9.SuperStructs[i] = MemberExpr{Base: base, Prop: e.(IdentExpr).Value}
+				default:
+					Typ9.SuperStructs[i] = e
+				}
+			}
+			return s.ofNamespace(s.getPropType(expr.(MemberExpr).Prop, Typ9), base, table)
 		case UnionType:
 			for x, prop := range Typ.(UnionType).Identifiers {
 				if bytes.Compare(prop.Buff, expr.(MemberExpr).Prop.Buff) == 0 {
 					return Typ.(UnionType).Types[x]
 				}
 			}
+		case VecType:
+			return s.getVectorPropType(Typ7.(VecType), expr.(MemberExpr).Prop)
 		}
 	}
 
+	return nil
+}
+
+func (s *SemanticAnalyzer) getVectorPropType(vec VecType, prop Token) Type {
+	switch string(prop.Buff) {
+	case "push":
+		return FuncType{
+			Type:        OrdFunction | WorkFunction,
+			ReturnTypes: []Type{vec.BaseType},
+			ArgTypes:    []Type{vec, vec.BaseType},
+		}
+	case "pop":
+		return FuncType{
+			Type:        OrdFunction | WorkFunction,
+			ReturnTypes: []Type{vec.BaseType},
+			ArgTypes:    []Type{vec},
+		}
+	case "concat":
+		return FuncType{
+			Type:        OrdFunction | WorkFunction,
+			ReturnTypes: []Type{vec},
+			ArgTypes:    []Type{vec, vec},
+		}
+	case "slice":
+		return FuncType{
+			Type:        OrdFunction | WorkFunction,
+			ReturnTypes: []Type{vec},
+			ArgTypes:    []Type{vec, BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("size_t"), PrimaryType: Identifier}}}, BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("size_t"), PrimaryType: Identifier}}}},
+		}
+	case "free":
+		return FuncType{
+			Type:        OrdFunction | WorkFunction,
+			ReturnTypes: []Type{VoidType},
+			ArgTypes:    []Type{vec},
+		}
+	case "clone":
+		return FuncType{
+			Type:        OrdFunction | WorkFunction,
+			ReturnTypes: []Type{vec},
+			ArgTypes:    []Type{vec},
+		}
+	case "length":
+		return BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("size_t"), PrimaryType: Identifier}}}
+	case "capacity":
+		return BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("size_t"), PrimaryType: Identifier}}}
+	}
+	s.error("burh", prop.Line, prop.Column)
 	return nil
 }
 
@@ -1113,19 +1163,15 @@ func (s *SemanticAnalyzer) compareTypes(Type1 Type, Type2 Type) bool {
 		return s.compareTypes(BasicType{Expr: Type2.(BasicType).Expr.(MemberExpr).Base}, BasicType{Expr: Type1.(BasicType).Expr.(MemberExpr).Base}) && bytes.Compare(Type2.(BasicType).Expr.(MemberExpr).Prop.Buff, Type1.(BasicType).Expr.(MemberExpr).Prop.Buff) == 0
 	case PointerType:
 		switch Type2.(type) {
-		case DynamicType:
-			return s.compareTypes(Type1.(PointerType).BaseType, Type2.(DynamicType).BaseType)
 		case PointerType:
 			return s.compareTypes(Type1.(PointerType).BaseType, Type2.(PointerType).BaseType)
 		default:
 			return false
 		}
-	case DynamicType:
+	case VecType:
 		switch Type2.(type) {
-		case DynamicType:
-			return s.compareTypes(Type1.(DynamicType).BaseType, Type2.(DynamicType).BaseType)
-		case PointerType:
-			return s.compareTypes(Type1.(DynamicType).BaseType, Type2.(PointerType).BaseType)
+		case VecType:
+			return s.compareTypes(Type1.(VecType).BaseType, Type2.(VecType).BaseType)
 		default:
 			return false
 		}
@@ -1215,13 +1261,13 @@ func (s *SemanticAnalyzer) typeCast(typecast TypeCast) {
 	}
 
 	switch type1.(type) {
-	case DynamicType:
+	case VecType:
 		switch type2.(type) {
-		case DynamicType:
+		case VecType:
 		case InternalType:
 			break
 		default:
-			s.error("Cannot typecast a non-dynamic type to a dynamic type.", typecast.LineM(), typecast.ColumnM())
+			s.error("Cannot typecast a non-vector type to a vector type.", typecast.LineM(), typecast.ColumnM())
 		}
 	case BasicType:
 	case PointerType:
@@ -1271,13 +1317,6 @@ func (s *SemanticAnalyzer) lenExpr(lenExpr LenExpr) {
 	Typ = s.getRootType(Typ)
 
 	switch Typ.(type) {
-	case DynamicType:
-		switch Typ.(DynamicType).BaseType.(type) {
-		case ImplictArrayType:
-			return
-		case ArrayType:
-			return
-		}
 	case ArrayType:
 		return
 	case ImplictArrayType:
@@ -1323,8 +1362,8 @@ func (s *SemanticAnalyzer) ofNamespace(typ Type, name Expression, t *SymbolTable
 		}
 	case PointerType:
 		return PointerType{BaseType: s.ofNamespace(typ.(PointerType).BaseType, name, t), Line: typ.LineM(), Column: typ.ColumnM()}
-	case DynamicType:
-		return DynamicType{BaseType: s.ofNamespace(typ.(DynamicType).BaseType, name, t), Line: typ.LineM(), Column: typ.ColumnM()}
+	case VecType:
+		return VecType{BaseType: s.ofNamespace(typ.(VecType).BaseType, name, t), Line: typ.LineM(), Column: typ.ColumnM()}
 	case ArrayType:
 		return ArrayType{BaseType: s.ofNamespace(typ.(ArrayType).BaseType, name, t), Size: typ.(ArrayType).Size, Line: typ.LineM(), Column: typ.ColumnM()}
 	case ImplictArrayType:

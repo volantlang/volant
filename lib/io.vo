@@ -4,7 +4,7 @@ export func printChar(char: u8){
 
 export func work print(buf: *u8){
     c := buf[0];
-    for i: ssize_t = 1; c != 0; ++i {
+    for i: size_t = 1; c != 0; ++i {
         printChar(c);
         c = buf[i];
     }

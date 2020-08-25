@@ -53,6 +53,20 @@ func getPropName(prop Token) Token {
 	return Token{Buff: []byte("p_" + string(prop.Buff)), PrimaryType: prop.PrimaryType, SecondaryType: prop.SecondaryType, Line: prop.Line, Column: prop.Column, Flags: 7}
 }
 
+func (n *Namespace) getVecPropName(prop Token) Token {
+	newToken := Token{Line: prop.Line, Column: prop.Column, PrimaryType: Identifier, SecondaryType: SecondaryNullType, Flags: 10}
+
+	switch string(prop.Buff) {
+	case "push":
+		newToken.Buff = []byte("VECTOR_PUSH")
+	case "pop":
+		newToken.Buff = []byte("VECTOR_POP")
+	default:
+		newToken.Buff = prop.Buff
+	}
+	return newToken
+}
+
 func (n *Namespace) getActualName(token Token) Token {
 	if token.Flags == 0 {
 		return token

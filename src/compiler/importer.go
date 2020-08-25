@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 	. "parser"
+	"path"
 	Path "path"
 	"strconv"
 )
@@ -13,6 +14,8 @@ var exPath, _ = os.Executable()
 var libPath = Path.Join(Path.Dir(exPath), "../lib")
 
 var wd, _ = os.Getwd()
+
+var dfPath = path.Join(libPath, "internal/default.h")
 var DefaultC = []byte(`
 int main() {
 	return v0_main();
@@ -56,7 +59,7 @@ func ImportFile(dir string, base string, isMain bool, num2 int) *SymbolTable {
 		if !isMain {
 			f.Write([]byte("#ifndef H_" + n + "\n#define H_" + n + "\n"))
 		}
-		f.Write([]byte("#include \"default.h\"\n"))
+		f.Write([]byte("#include \"internal/default.h\"\n"))
 		f.Write(CompileOnlyDeclarations(newAst))
 
 		// #include \"" + OutPath + ".h\"\n

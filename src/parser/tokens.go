@@ -60,7 +60,7 @@ const (
 	ContinueKeyword PrimaryTokenType = 118
 	NewKeyword      PrimaryTokenType = 119
 	ConstKeyword    PrimaryTokenType = 120
-	DynamicKeyword  PrimaryTokenType = 121
+	VecKeyword      PrimaryTokenType = 121
 	DeleteKeyword   PrimaryTokenType = 122
 	TypedefKeyword  PrimaryTokenType = 123
 	CastKeyword     PrimaryTokenType = 124
@@ -163,16 +163,16 @@ var Keywords = map[string]PrimaryTokenType{
 	"tuple":    TupleKeyword,
 	"new":      NewKeyword,
 	"const":    ConstKeyword,
-	"dynamic":  DynamicKeyword,
+	"vec":      VecKeyword,
 	"delete":   DeleteKeyword,
 	"typedef":  TypedefKeyword,
 	"cast":     CastKeyword,
-	"len":      LenKeyword,
-	"size":     SizeKeyword,
-	"export":   ExportKeyword,
-	"union":    UnionKeyword,
-	"static":   StaticKeyword,
-	"capture":  CaptureKeyword,
+	// "len":      LenKeyword,
+	"sizeof":  SizeKeyword,
+	"export":  ExportKeyword,
+	"union":   UnionKeyword,
+	"static":  StaticKeyword,
+	"capture": CaptureKeyword,
 	// more stuff
 }
 

@@ -224,6 +224,8 @@ func (c *Compiler) statement(stmt Statement) {
 	switch stmt.(type) {
 	case Declaration:
 		c.declaration(stmt.(Declaration))
+	case Typedef:
+		c.typedef(stmt.(Typedef))
 	case Return:
 		c.rturn(stmt.(Return))
 	case IfElseBlock:
@@ -509,30 +511,7 @@ func (c *Compiler) expression(expr Expression) {
 		c.append([]byte("->"))
 		c.identifier(expr.(PointerMemberExpr).Prop)
 	case CompoundLiteral:
-		c.openParen()
-		c.expression(expr.(CompoundLiteral).Name)
-		c.closeParen()
-
-		c.openCurlyBrace()
-		if len(expr.(CompoundLiteral).Data.Fields) > 0 {
-			for i, field := range expr.(CompoundLiteral).Data.Fields {
-				c.dot()
-				c.identifier(field)
-				c.space()
-				c.equal()
-				c.space()
-				c.expression(expr.(CompoundLiteral).Data.Values[i])
-				c.comma()
-				c.space()
-			}
-		} else {
-			for _, val := range expr.(CompoundLiteral).Data.Values {
-				c.expression(val)
-				c.comma()
-				c.space()
-			}
-		}
-		c.closeCurlyBrace()
+		c.compoundLiteral(expr.(CompoundLiteral))
 	case TypeCast:
 		c.openParen()
 		c.Type(expr.(TypeCast).Type.(Type), []byte{})
@@ -560,6 +539,51 @@ func (c *Compiler) expression(expr Expression) {
 		c.funcExprType(expr.(FuncExpr).Type, nil, nil, false)
 		c.block(expr.(FuncExpr).Block)
 	}
+}
+
+func (c *Compiler) compoundLiteral(expr CompoundLiteral) {
+
+	switch expr.Name.(type) {
+	case VecType:
+		c.append([]byte("new4"))
+		c.openParen()
+		c.Type(expr.Name.(VecType).BaseType, []byte{})
+		c.comma()
+		c.space()
+		c.openParen()
+		c.expression(CompoundLiteral{Name: ImplictArrayType{BaseType: expr.Name.(VecType).BaseType}, Data: CompoundLiteralData{Fields: expr.Data.Fields, Values: expr.Data.Values}})
+		c.closeParen()
+		c.comma()
+		c.space()
+		c.append([]byte(strconv.Itoa(len(expr.Data.Values))))
+		c.closeParen()
+		return
+	}
+
+	c.openParen()
+	c.Type(expr.Name, []byte{})
+	c.closeParen()
+
+	c.openCurlyBrace()
+	if len(expr.Data.Fields) > 0 {
+		for i, field := range expr.Data.Fields {
+			c.dot()
+			c.identifier(field)
+			c.space()
+			c.equal()
+			c.space()
+			c.expression(expr.Data.Values[i])
+			c.comma()
+			c.space()
+		}
+	} else {
+		for _, val := range expr.Data.Values {
+			c.expression(val)
+			c.comma()
+			c.space()
+		}
+	}
+	c.closeCurlyBrace()
 }
 
 func (c *Compiler) functionCall(call CallExpr) {
@@ -710,8 +734,10 @@ func (c *Compiler) decType(Typ Type, expr Expression) {
 		c.closeBrace()
 	case PointerType:
 		c.decType(Typ.(PointerType).BaseType, UnaryExpr{Op: Token{PrimaryType: AirthmaticOperator, SecondaryType: Mul, Buff: []byte("*")}, Expr: expr})
-	case DynamicType:
-		c.decType(Typ.(DynamicType).BaseType, UnaryExpr{Op: Token{PrimaryType: AirthmaticOperator, SecondaryType: Mul, Buff: []byte("*")}, Expr: expr})
+	/*
+		case DynamicType:
+			c.decType(Typ.(DynamicType).BaseType, UnaryExpr{Op: Token{PrimaryType: AirthmaticOperator, SecondaryType: Mul, Buff: []byte("*")}, Expr: expr})
+	*/
 	case BasicType:
 		c.expression(Typ.(BasicType).Expr)
 		if expr != nil {
@@ -753,6 +779,11 @@ func (c *Compiler) decType(Typ Type, expr Expression) {
 	case StaticType:
 		c.append([]byte("static "))
 		c.decType(Typ.(StaticType).BaseType, expr)
+	case VecType:
+		c.append([]byte("VECTOR_TYPE("))
+		c.Type(Typ.(VecType).BaseType, []byte{})
+		c.closeParen()
+		c.expression(expr)
 	}
 }
 
@@ -873,9 +904,6 @@ func (c *Compiler) Type(Typ Type, buf []byte) {
 	case PointerType:
 		buf = append(buf, '*')
 		c.Type(Typ.(PointerType).BaseType, buf)
-	case DynamicType:
-		buf = append(buf, '*')
-		c.Type(Typ.(DynamicType).BaseType, buf)
 	case BasicType:
 		c.expression(Typ.(BasicType).Expr)
 		c.append(buf)
@@ -898,6 +926,10 @@ func (c *Compiler) Type(Typ Type, buf []byte) {
 	case StaticType:
 		c.append([]byte("static "))
 		c.Type(Typ.(StaticType).BaseType, buf)
+	case VecType:
+		c.append([]byte("VECTOR_TYPE("))
+		c.Type(Typ.(VecType).BaseType, buf)
+		c.closeParen()
 	}
 }
 

@@ -339,7 +339,7 @@ type (
 		Column   int
 	}
 
-	DynamicType struct {
+	VecType struct {
 		BaseType Type
 		Line     int
 		Column   int
@@ -442,7 +442,7 @@ func (FuncType) isType()         {}
 func (ConstType) isType()        {}
 func (PointerType) isType()      {}
 func (ArrayType) isType()        {}
-func (DynamicType) isType()      {}
+func (VecType) isType()          {}
 func (ImplictArrayType) isType() {}
 func (Typedef) isType()          {}
 func (InternalType) isType()     {}
@@ -459,7 +459,7 @@ func (FuncType) isExpression()         {}
 func (ConstType) isExpression()        {}
 func (PointerType) isExpression()      {}
 func (ArrayType) isExpression()        {}
-func (DynamicType) isExpression()      {}
+func (VecType) isExpression()          {}
 func (ImplictArrayType) isExpression() {}
 func (Typedef) isExpression()          {}
 func (InternalType) isExpression()     {}
@@ -476,7 +476,7 @@ func (FuncType) isStatement()         {}
 func (ConstType) isStatement()        {}
 func (PointerType) isStatement()      {}
 func (ArrayType) isStatement()        {}
-func (DynamicType) isStatement()      {}
+func (VecType) isStatement()          {}
 func (ImplictArrayType) isStatement() {}
 func (Typedef) isStatement()          {}
 func (InternalType) isStatement()     {}
@@ -706,7 +706,7 @@ func (t PointerType) LineM() int {
 func (t ArrayType) LineM() int {
 	return t.Line
 }
-func (t DynamicType) LineM() int {
+func (t VecType) LineM() int {
 	return t.Line
 }
 func (t ImplictArrayType) LineM() int {
@@ -755,7 +755,7 @@ func (t PointerType) ColumnM() int {
 func (t ArrayType) ColumnM() int {
 	return t.Column
 }
-func (t DynamicType) ColumnM() int {
+func (t VecType) ColumnM() int {
 	return t.Column
 }
 func (t ImplictArrayType) ColumnM() int {
@@ -816,11 +816,11 @@ var F64Type = Typedef{Name: F64Token, Type: BasicType{Expr: IdentExpr{Value: Tok
 var True = IdentExpr{Value: Token{Buff: []byte("true"), PrimaryType: Identifier}}
 var False = IdentExpr{Value: Token{Buff: []byte("false"), PrimaryType: Identifier}}
 
-var SSizeTToken = Token{Buff: []byte("ssize_t"), PrimaryType: Identifier}
-var SSizeTType = Typedef{Name: I64Token, Type: BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("$ssize_t"), PrimaryType: Identifier}}}}
+var SizeTToken = Token{Buff: []byte("size_t"), PrimaryType: Identifier}
+var SizeTType = Typedef{Name: I64Token, Type: BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("$size_t"), PrimaryType: Identifier}}}}
 
 var UptrToken = Token{Buff: []byte("uptr"), PrimaryType: Identifier}
 var UptrType = Typedef{Name: I64Token, Type: BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("$unitptr"), PrimaryType: Identifier}}}}
 
-var Globals = []string{"u8", "u16", "u32", "u64", "i8", "i16", "i32", "i64", "uptr", "f32", "f64", "void", "bool", "ssize_t", "true", "false"}
-var GlobalTypes = []string{"u8", "u16", "u32", "u64", "i8", "i16", "i32", "i64", "uptr", "f32", "f64", "void", "bool", "ssize_t"}
+var Globals = []string{"u8", "u16", "u32", "u64", "i8", "i16", "i32", "i64", "uptr", "f32", "f64", "void", "bool", "size_t", "true", "false"}
+var GlobalTypes = []string{"u8", "u16", "u32", "u64", "i8", "i16", "i32", "i64", "uptr", "f32", "f64", "void", "bool", "size_t"}

@@ -429,16 +429,12 @@ func (f *Formatter) callExpr(expr CallExpr) CallExpr {
 				switch BaseType.(type) {
 				case PointerType:
 					Args = append([]Expression{f.expr(Base)}, Args...)
-				case DynamicType:
-					Args = append([]Expression{f.expr(Base)}, Args...)
 				default:
 					Args = append([]Expression{f.expr(UnaryExpr{Expr: Base, Op: Token{Buff: []byte("&"), PrimaryType: AirthmaticOperator, SecondaryType: Mul}})}, Args...)
 				}
 			default:
 				switch BaseType.(type) {
 				case PointerType:
-					Args = append([]Expression{f.expr(UnaryExpr{Expr: Base, Op: Token{Buff: []byte("*"), PrimaryType: AirthmaticOperator, SecondaryType: Mul}})}, Args...)
-				case DynamicType:
 					Args = append([]Expression{f.expr(UnaryExpr{Expr: Base, Op: Token{Buff: []byte("*"), PrimaryType: AirthmaticOperator, SecondaryType: Mul}})}, Args...)
 				default:
 					Args = append([]Expression{f.expr(Base)}, Args...)
@@ -461,8 +457,8 @@ func (f *Formatter) typ(typ Type) Type {
 		return f.typ(I32Type.Type)
 	case PointerType:
 		return PointerType{BaseType: f.typ(typ.(PointerType).BaseType)}
-	case DynamicType:
-		return DynamicType{BaseType: f.typ(typ.(DynamicType).BaseType)}
+	case VecType:
+		return VecType{BaseType: f.typ(typ.(VecType).BaseType)}
 	case ConstType:
 		return ConstType{BaseType: f.typ(typ.(ConstType).BaseType)}
 	case CaptureType:
@@ -648,64 +644,51 @@ func (f *Formatter) compoundLiteralData(data CompoundLiteralData) CompoundLitera
 }
 
 func (f *Formatter) arrayMemberExpr(expr ArrayMemberExpr) Expression {
-	Typ := f.getType(expr)
+	Typ := f.getRootType(f.getType(expr.Parent))
 
 	switch Typ.(type) {
-	case BasicType:
-		break
-	default:
-		return ArrayMemberExpr{Parent: f.decayToPointer(f.expr(expr.Parent)), Index: f.expr(expr.Index)}
-	}
-
-	Typ = f.getType(Typ.(BasicType).Expr)
-
-	if Typ == nil {
-		return ArrayMemberExpr{Parent: f.decayToPointer(f.expr(expr.Parent)), Index: f.expr(expr.Index)}
-	}
-
-	switch Typ.(type) {
-	case Typedef:
-		break
-	default:
-		return ArrayMemberExpr{Parent: f.decayToPointer(f.expr(expr.Parent)), Index: f.expr(expr.Index)}
-	}
-
-	switch Typ.(Typedef).Type.(type) {
+	case VecType:
+		return ArrayMemberExpr{
+			Parent: PointerMemberExpr{
+				Base: f.expr(expr.Parent),
+				Prop: Token{Buff: []byte("mem"), PrimaryType: Identifier},
+			},
+			Index: f.expr(expr.Index),
+		}
 	case TupleType:
-		break
+		return MemberExpr{
+			Base: f.expr(expr.Parent),
+			Prop: Token{Buff: []byte("_" + string(expr.Index.(BasicLit).Value.Buff)), PrimaryType: Identifier},
+		}
 	default:
-		return ArrayMemberExpr{Parent: f.decayToPointer(f.expr(expr.Parent)), Index: f.expr(expr.Index)}
-	}
-
-	return MemberExpr{
-		Base: f.expr(expr.Parent),
-		Prop: Token{Buff: []byte("_" + string(expr.Index.(BasicLit).Value.Buff)), PrimaryType: Identifier},
+		return ArrayMemberExpr{Parent: f.expr(f.expr(expr.Parent)), Index: f.expr(expr.Index)}
 	}
 }
 
 func (f *Formatter) lenExpr(expr LenExpr) Expression {
-	var Expr Expression
+	// var Expr Expression
 	Typ := expr.Type
 
 	switch Typ.(type) {
 	case BasicType:
 		Typ = f.getType(Typ.(BasicType).Expr)
-		Expr = f.expr(Typ.(BasicType).Expr)
+		// Expr = f.expr(Typ.(BasicType).Expr)
 	}
 
 	Typ = f.getRootType(Typ)
-
-	switch Typ.(type) {
-	case ArrayType:
-		return CallExpr{Function: IdentExpr{Value: Token{Buff: []byte("len2")}}, Args: []Expression{Typ, Typ.(ArrayType).BaseType}}
-	case DynamicType:
-		switch Typ.(DynamicType).BaseType.(type) {
-		case ImplictArrayType:
-			return CallExpr{Function: IdentExpr{Value: Token{Buff: []byte("len")}}, Args: []Expression{Expr, Typ.(DynamicType).BaseType.(ImplictArrayType).BaseType}}
+	/*
+		switch Typ.(type) {
 		case ArrayType:
-			return CallExpr{Function: IdentExpr{Value: Token{Buff: []byte("len2")}}, Args: []Expression{Typ.(DynamicType).BaseType, Typ.(DynamicType).BaseType.(ArrayType).BaseType}}
+			return CallExpr{Function: IdentExpr{Value: Token{Buff: []byte("len2")}}, Args: []Expression{Typ, Typ.(ArrayType).BaseType}}
+		case DynamicType:
+			switch Typ.(DynamicType).BaseType.(type) {
+			case ImplictArrayType:
+				return CallExpr{Function: IdentExpr{Value: Token{Buff: []byte("len")}}, Args: []Expression{Expr, Typ.(DynamicType).BaseType.(ImplictArrayType).BaseType}}
+			case ArrayType:
+				return CallExpr{Function: IdentExpr{Value: Token{Buff: []byte("len2")}}, Args: []Expression{Typ.(DynamicType).BaseType, Typ.(DynamicType).BaseType.(ArrayType).BaseType}}
+			}
 		}
-	}
+	*/
 	return CallExpr{Function: IdentExpr{Value: Token{Buff: []byte("len3")}}, Args: []Expression{Typ}}
 }
 
@@ -721,13 +704,7 @@ func (f *Formatter) sizeExpr(expr SizeExpr) CallExpr {
 		Expr = f.typ(Typ)
 	}
 
-	Typ = f.getRootType(Typ)
-
-	switch Typ.(type) {
-	case DynamicType:
-		return CallExpr{Function: IdentExpr{Value: Token{Buff: []byte("size")}}, Args: []Expression{Expr}}
-	}
-	return CallExpr{Function: IdentExpr{Value: Token{Buff: []byte("size2")}}, Args: []Expression{Expr}}
+	return CallExpr{Function: IdentExpr{Value: Token{Buff: []byte("sizeof")}}, Args: []Expression{Expr}}
 }
 
 func (f *Formatter) memberExpr(expr MemberExpr) Expression {
@@ -748,9 +725,6 @@ func (f *Formatter) memberExpr(expr MemberExpr) Expression {
 	switch Typ.(type) {
 	case PointerType:
 		Typ = Typ.(PointerType).BaseType
-		isPointer = true
-	case DynamicType:
-		Typ = Typ.(DynamicType).BaseType
 		isPointer = true
 	}
 
@@ -792,12 +766,14 @@ func (f *Formatter) memberExpr(expr MemberExpr) Expression {
 		}
 	}
 
-	Typ = f.getType(Typ.(BasicType).Expr)
+	Typ = f.getRootType(Typ)
 	var Typ2 StructType
 
 	switch Typ.(type) {
-	case Typedef:
-		Typ2 = Typ.(Typedef).Type.(StructType)
+	case StructType:
+		Typ2 = Typ.(StructType)
+	case VecType:
+		return f.getVecProp(expr)
 	default:
 		return MemberExpr{Base: f.expr(expr.Base), Prop: f.NameSp.getPropName(expr.Prop)}
 	}
@@ -829,31 +805,38 @@ func (f *Formatter) memberExpr(expr MemberExpr) Expression {
 		return IdentExpr{Value: f.NameSp.getStrctMethodNameFromPrefix(prefix, ident, Typ.(Typedef).Name)}
 	}
 
-	/*
-		if t := f.getPropType(ident, Typ2); t != nil {
-			switch t.(type) {
-			case FuncType:
-				return IdentExpr{Value: f.NameSp.getStrctMethodNameFromPrefix(prefix, ident, Typ.(Typedef).Name)}
-			}
-		} else {
-			for _, superSt := range Typ2.SuperStructs {
-				var t2 Type
-
-				if isImported {
-					t2 = f.getPropType(ident, f.getRootType(f.getType(MemberExpr{Base: p2, Prop: superSt.(IdentExpr).Value})).(StructType))
-				} else {
-					t2 = f.getPropType(ident, f.getRootType(f.getType(superSt)).(StructType))
-				}
-
-
-			}
-		}
-	*/
-
 	if isPointer {
 		return PointerMemberExpr{Base: f.expr(expr.Base), Prop: f.NameSp.getPropName(expr.Prop)}
 	}
 	return MemberExpr{Base: f.expr(expr.Base), Prop: f.NameSp.getPropName(expr.Prop)}
+}
+
+func (f *Formatter) getVecProp(expr MemberExpr) Expression {
+	switch string(expr.Prop.Buff) {
+	case "length":
+		return PointerMemberExpr{
+			Base: f.expr(expr.Base),
+			Prop: expr.Prop,
+		}
+	case "capacity":
+		return PointerMemberExpr{
+			Base: f.expr(expr.Base),
+			Prop: expr.Prop,
+		}
+	case "push":
+		return IdentExpr{Value: Token{Buff: []byte("VECTOR_PUSH")}}
+	case "pop":
+		return IdentExpr{Value: Token{Buff: []byte("VECTOR_POP")}}
+	case "concat":
+		return IdentExpr{Value: Token{Buff: []byte("VECTOR_CONCAT")}}
+	case "slice":
+		return IdentExpr{Value: Token{Buff: []byte("VECTOR_SLICE")}}
+	case "free":
+		return IdentExpr{Value: Token{Buff: []byte("VECTOR_FREE")}}
+	case "clone":
+		return IdentExpr{Value: Token{Buff: []byte("VECTOR_CLONE")}}
+	}
+	return nil
 }
 
 func (f *Formatter) exprArray(array []Expression) []Expression {
@@ -862,29 +845,6 @@ func (f *Formatter) exprArray(array []Expression) []Expression {
 		Exprs = append(Exprs, f.expr(Expr))
 	}
 	return Exprs
-}
-
-func (f *Formatter) decayToPointer(expr Expression) Expression {
-	/*
-		Typ := f.getType(expr)
-
-		switch Typ.(type) {
-		case DynamicType:
-			switch Typ.(DynamicType).BaseType.(type) {
-			case ImplictArrayType:
-				return TypeCast{
-					Type: PointerType{BaseType: Typ.(DynamicType).BaseType.(ImplictArrayType).BaseType},
-					Expr: PointerMemberExpr{Base: expr, Prop: Token{Buff: []byte("mem"), PrimaryType: Identifier}},
-				}
-			}
-			return TypeCast{
-				Type: PointerType{BaseType: Typ.(DynamicType).BaseType},
-				Expr: PointerMemberExpr{Base: expr, Prop: Token{Buff: []byte("mem"), PrimaryType: Identifier}},
-			}
-		}
-	*/
-
-	return expr
 }
 
 func (f *Formatter) getType(expr Expression) Type {
@@ -940,8 +900,6 @@ func (f *Formatter) getType(expr Expression) Type {
 			switch Typ.(type) {
 			case PointerType:
 				return Typ.(PointerType).BaseType
-			case DynamicType:
-				return Typ.(DynamicType).BaseType
 			}
 		} else if expr.(UnaryExpr).Op.SecondaryType == And {
 			return PointerType{BaseType: f.getType(expr.(UnaryExpr).Expr)}
@@ -968,13 +926,8 @@ func (f *Formatter) getType(expr Expression) Type {
 			return Typ.(ImplictArrayType).BaseType
 		case PointerType:
 			return Typ.(PointerType).BaseType
-		case DynamicType:
-			switch Typ.(DynamicType).BaseType.(type) {
-			case ImplictArrayType:
-				return Typ.(DynamicType).BaseType.(ImplictArrayType).BaseType
-			default:
-				return Typ.(DynamicType).BaseType
-			}
+		case VecType:
+			return Typ.(VecType).BaseType
 		}
 		return Typ
 	case FuncExpr:
@@ -1010,52 +963,102 @@ func (f *Formatter) getType(expr Expression) Type {
 		switch Typ.(type) {
 		case PointerType:
 			Typ = Typ.(PointerType).BaseType
-		case DynamicType:
-			Typ = Typ.(DynamicType).BaseType
 		case Typedef:
 			return Typ.(Typedef).Type
-		}
-
-		switch Typ.(BasicType).Expr.(type) {
-		case MemberExpr:
-			if t, ok := f.Imports[string(Typ.(BasicType).Expr.(MemberExpr).Base.(IdentExpr).Value.Buff)]; ok {
-				isImported = true
-				table = t
-				base = Typ.(BasicType).Expr.(MemberExpr).Base
-			}
 		}
 
 		Typ7 := f.getRootType(Typ)
 
 		switch Typ7.(type) {
-		case StructType:
-			if isImported {
-				Typ8 := Typ7.(StructType)
-				Typ9 := StructType{}
-				Typ9.Props = Typ8.Props
-				Typ9.SuperStructs = make([]Expression, len(Typ8.SuperStructs))
-
-				for i, e := range Typ8.SuperStructs {
-					switch e.(type) {
-					case IdentExpr:
-						Typ9.SuperStructs[i] = MemberExpr{Base: base, Prop: e.(IdentExpr).Value}
-					default:
-						Typ9.SuperStructs[i] = e
-					}
+		case BasicType:
+			switch Typ7.(BasicType).Expr.(type) {
+			case MemberExpr:
+				t, ok := f.Imports[string(Typ.(BasicType).Expr.(MemberExpr).Base.(IdentExpr).Value.Buff)]
+				if !ok {
+					break
 				}
-
-				return f.ofNamespace(f.getPropType(expr.(MemberExpr).Prop, Typ9), base, table)
+				isImported = true
+				table = t
+				base = Typ7.(BasicType).Expr.(MemberExpr).Base
 			}
-			return f.getPropType(expr.(MemberExpr).Prop, Typ7.(StructType))
+		}
+
+		switch Typ7.(type) {
+		case StructType:
+			if !isImported {
+				return f.getPropType(expr.(MemberExpr).Prop, Typ7.(StructType))
+			}
+			Typ8 := Typ7.(StructType)
+			Typ9 := StructType{}
+			Typ9.Props = Typ8.Props
+			Typ9.SuperStructs = make([]Expression, len(Typ8.SuperStructs))
+
+			for i, e := range Typ8.SuperStructs {
+				switch e.(type) {
+				case IdentExpr:
+					Typ9.SuperStructs[i] = MemberExpr{Base: base, Prop: e.(IdentExpr).Value}
+				default:
+					Typ9.SuperStructs[i] = e
+				}
+			}
+			return f.ofNamespace(f.getPropType(expr.(MemberExpr).Prop, Typ9), base, table)
 		case UnionType:
 			for x, prop := range Typ.(UnionType).Identifiers {
 				if bytes.Compare(prop.Buff, expr.(MemberExpr).Prop.Buff) == 0 {
 					return Typ.(UnionType).Types[x]
 				}
 			}
+		case VecType:
+			return f.getVectorPropType(Typ.(VecType), expr.(MemberExpr).Prop)
 		}
 	}
 
+	return nil
+}
+
+func (f *Formatter) getVectorPropType(vec VecType, prop Token) Type {
+	switch string(prop.Buff) {
+	case "push":
+		return FuncType{
+			Type:        OrdFunction | WorkFunction,
+			ReturnTypes: []Type{vec.BaseType},
+			ArgTypes:    []Type{vec, vec.BaseType},
+		}
+	case "pop":
+		return FuncType{
+			Type:        OrdFunction | WorkFunction,
+			ReturnTypes: []Type{vec.BaseType},
+			ArgTypes:    []Type{vec},
+		}
+	case "concat":
+		return FuncType{
+			Type:        OrdFunction | WorkFunction,
+			ReturnTypes: []Type{vec},
+			ArgTypes:    []Type{vec, vec},
+		}
+	case "slice":
+		return FuncType{
+			Type:        OrdFunction | WorkFunction,
+			ReturnTypes: []Type{vec},
+			ArgTypes:    []Type{vec, BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("size_t"), PrimaryType: Identifier}}}, BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("size_t"), PrimaryType: Identifier}}}},
+		}
+	case "free":
+		return FuncType{
+			Type:        OrdFunction | WorkFunction,
+			ReturnTypes: []Type{VoidType},
+			ArgTypes:    []Type{vec},
+		}
+	case "clone":
+		return FuncType{
+			Type:        OrdFunction | WorkFunction,
+			ReturnTypes: []Type{vec},
+			ArgTypes:    []Type{vec},
+		}
+	case "length":
+		return BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("size_t"), PrimaryType: Identifier}}}
+	case "capacity":
+		return BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("size_t"), PrimaryType: Identifier}}}
+	}
 	return nil
 }
 
@@ -1190,19 +1193,15 @@ func (f *Formatter) compareTypes(Type1 Type, Type2 Type) bool {
 		// needs work
 	case PointerType:
 		switch Type2.(type) {
-		case DynamicType:
-			return f.compareTypes(Type1.(PointerType).BaseType, Type2.(DynamicType).BaseType)
 		case PointerType:
 			return f.compareTypes(Type1.(PointerType).BaseType, Type2.(PointerType).BaseType)
 		default:
 			return false
 		}
-	case DynamicType:
+	case VecType:
 		switch Type2.(type) {
-		case DynamicType:
-			return f.compareTypes(Type1.(DynamicType).BaseType, Type2.(DynamicType).BaseType)
-		case PointerType:
-			return f.compareTypes(Type1.(DynamicType).BaseType, Type2.(PointerType).BaseType)
+		case VecType:
+			return f.compareTypes(Type1.(VecType).BaseType, Type2.(VecType).BaseType)
 		default:
 			return false
 		}
@@ -1288,8 +1287,8 @@ func (f *Formatter) ofNamespace(typ Type, name Expression, t *SymbolTable) Type 
 		}
 	case PointerType:
 		return PointerType{BaseType: f.ofNamespace(typ.(PointerType).BaseType, name, t), Line: typ.LineM(), Column: typ.ColumnM()}
-	case DynamicType:
-		return DynamicType{BaseType: f.ofNamespace(typ.(DynamicType).BaseType, name, t), Line: typ.LineM(), Column: typ.ColumnM()}
+	case VecType:
+		return VecType{BaseType: f.ofNamespace(typ.(VecType).BaseType, name, t), Line: typ.LineM(), Column: typ.ColumnM()}
 	case ArrayType:
 		return ArrayType{BaseType: f.ofNamespace(typ.(ArrayType).BaseType, name, t), Size: typ.(ArrayType).Size, Line: typ.LineM(), Column: typ.ColumnM()}
 	case ImplictArrayType:

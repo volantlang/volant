@@ -1,23 +1,16 @@
-/*
-struct String {
-    length: size_t;
-    buf: []u8;
-};
+export typedef String vec u8;
 
-from := func work (buf: *u8){
-    l := _len(buf);
-    
-    str := 
-};
+export func work from(bytes: u8[]) String {
+    str := (String){};
 
+    c = bytes[0]
+    for i: size_t = 1; c != 0; ++i {
+        str.push(c);
+        c = bytes[c];
+    }
+    return str;
+}
 
-_len := func work (buf: *u8) ssize_t {
-    i: ssize_t = 0;
-    c := buf[0];
+export func work toLower() String {
 
-    for ;c != 0; ++i {
-        c = buf[i];
-    } 
-    return i;
-};
-*/
+}

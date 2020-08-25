@@ -204,7 +204,7 @@ export struct Req {
 		return $uv_req_get_data(&self.__req);
 	}
 }
-
+/*
 // Stream
 export struct Stream {
 	..Handle;
@@ -237,7 +237,7 @@ struct StreamData {
 	shutdownCb: func(*Stream, i32);
 	connectionCb: func(*Stream, i32);
 }
-/*
+
 // Tty
 export struct Tty {
 	..Handle;
@@ -247,6 +247,5 @@ export struct Tty {
 		$uv_tty_init(&loop.__loop, cast(*$uv_tty_t)&self.__handle, cast($uv_file)fd, unused);
 		self._init();
 	};
-
 };
 */

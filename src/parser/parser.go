@@ -112,7 +112,7 @@ func (parser *Parser) parseGlobalStatement() Statement {
 	switch token := parser.ReadToken(); token.PrimaryType {
 	case ImportKeyword:
 		parser.eatLastToken()
-		statement = parser.parseImport()
+		return parser.parseImport()
 	case StructKeyword:
 		parser.eatLastToken()
 		return parser.parseStructTypedef(false)
@@ -124,10 +124,10 @@ func (parser *Parser) parseGlobalStatement() Statement {
 		return parser.parseTupleTypedef(false)
 	case UnionKeyword:
 		parser.eatLastToken()
-		statement = parser.parseUnionTypedef()
+		return parser.parseUnionTypedef()
 	case TypedefKeyword:
 		parser.eatLastToken()
-		statement = parser.parseTypedef()
+		return parser.parseTypedef()
 	case ExportKeyword:
 		parser.eatLastToken()
 		return ExportStatement{Stmt: parser.parseGlobalStatement()}
@@ -145,6 +145,147 @@ func (parser *Parser) parseGlobalStatement() Statement {
 	parser.expect(SemiColon, SecondaryNullType)
 	parser.eatLastToken()
 	return statement
+}
+
+func (parser *Parser) parseStatementNoSemicolon() Statement {
+	line, column := parser.pos()
+	var st Statement = NullStatement{Line: line, Column: column}
+
+	switch parser.ReadToken().PrimaryType {
+	case IfKeyword:
+		st = parser.parseIfElse()
+	case SwitchKeyword:
+		st = parser.parseSwitch()
+	case ForKeyword:
+		st = parser.parseLoop()
+	/*
+		case DeferKeyword:
+			parser.eatLastToken()
+			st = parser.parseDefer()
+	*/
+	case LeftCurlyBrace:
+		st = parser.parseBlock()
+	case ReturnKeyword:
+		st = parser.parseReturn()
+	case BreakKeyword:
+		parser.eatLastToken()
+		st = Break{Line: line, Column: column}
+	case StructKeyword:
+		parser.eatLastToken()
+		st = parser.parseStructTypedef(false)
+	case EnumKeyword:
+		parser.eatLastToken()
+		st = parser.parseEnumTypedef()
+	case TupleKeyword:
+		parser.eatLastToken()
+		st = parser.parseTupleTypedef(false)
+	case UnionKeyword:
+		parser.eatLastToken()
+		st = parser.parseUnionTypedef()
+	case TypedefKeyword:
+		parser.eatLastToken()
+		st = parser.parseTypedef()
+	case ContinueKeyword:
+		parser.eatLastToken()
+		st = Continue{Line: line, Column: column}
+	case DeleteKeyword:
+		parser.eatLastToken()
+		st = Delete{Exprs: parser.parseExpressionArray(), Line: line, Column: column}
+	case FunctionKeyword:
+		parser.eatLastToken()
+		st = parser.parseFunctionDec()
+	default:
+		parser.fork(0)
+		expr := parser.parseExpression()
+
+		if token := parser.ReadToken(); token.PrimaryType == AssignmentOperator {
+			parser.moveToFork(0)
+			st = parser.parseAssignment()
+		} else if token.SecondaryType == Colon {
+			parser.moveToFork(0)
+			st = parser.parseDeclaration()
+		} else if token.PrimaryType == Comma {
+			parser.moveToFork(0)
+			st = parser.parseDeclarationOrAssignment()
+		} else {
+			st = expr
+		}
+	}
+
+	return st
+}
+
+func (parser *Parser) parseStatement() Statement {
+	line, column := parser.pos()
+	var st Statement = NullStatement{Line: line, Column: column}
+
+	switch parser.ReadToken().PrimaryType {
+	case IfKeyword:
+		return parser.parseIfElse()
+	case SwitchKeyword:
+		return parser.parseSwitch()
+	case ForKeyword:
+		return parser.parseLoop()
+	/*
+		case DeferKeyword:
+			parser.eatLastToken()
+			st = parser.parseDefer()
+	*/
+	case LeftCurlyBrace:
+		return parser.parseBlock()
+	case FunctionKeyword:
+		parser.eatLastToken()
+		return parser.parseFunctionDec()
+	case ReturnKeyword:
+		st = parser.parseReturn()
+	case StructKeyword:
+		parser.eatLastToken()
+		return parser.parseStructTypedef(false)
+	case EnumKeyword:
+		parser.eatLastToken()
+		return parser.parseEnumTypedef()
+	case TupleKeyword:
+		parser.eatLastToken()
+		return parser.parseTupleTypedef(false)
+	case UnionKeyword:
+		parser.eatLastToken()
+		return parser.parseUnionTypedef()
+	case TypedefKeyword:
+		parser.eatLastToken()
+		return parser.parseTypedef()
+	case BreakKeyword:
+		parser.eatLastToken()
+		st = Break{Line: line, Column: column}
+	case ContinueKeyword:
+		parser.eatLastToken()
+		st = Continue{Line: line, Column: column}
+	case DeleteKeyword:
+		parser.eatLastToken()
+		st = Delete{Exprs: parser.parseExpressionArray(), Line: line, Column: column}
+	case SemiColon:
+		parser.eatLastToken()
+		return NullStatement{}
+	default:
+		parser.fork(0)
+		expr := parser.parseExpression()
+
+		if token := parser.ReadToken(); token.PrimaryType == AssignmentOperator {
+			parser.moveToFork(0)
+			st = parser.parseAssignment()
+		} else if token.SecondaryType == Colon {
+			parser.moveToFork(0)
+			st = parser.parseDeclaration()
+		} else if token.PrimaryType == Comma {
+			parser.moveToFork(0)
+			st = parser.parseDeclarationOrAssignment()
+		} else {
+			st = expr
+		}
+	}
+
+	parser.expect(SemiColon, SecondaryNullType)
+	parser.eatLastToken()
+	return st
 }
 
 func (parser *Parser) parseTypedef() Typedef {
@@ -756,117 +897,6 @@ func (parser *Parser) parseReturn() Return {
 	return Return{Values: parser.parseExpressionArray(), Line: line, Column: column}
 }
 
-func (parser *Parser) parseStatementNoSemicolon() Statement {
-	line, column := parser.pos()
-	var st Statement = NullStatement{Line: line, Column: column}
-
-	switch parser.ReadToken().PrimaryType {
-	case IfKeyword:
-		st = parser.parseIfElse()
-	case SwitchKeyword:
-		st = parser.parseSwitch()
-	case ForKeyword:
-		st = parser.parseLoop()
-	/*
-		case DeferKeyword:
-			parser.eatLastToken()
-			st = parser.parseDefer()
-	*/
-	case LeftCurlyBrace:
-		st = parser.parseBlock()
-	case ReturnKeyword:
-		st = parser.parseReturn()
-	case BreakKeyword:
-		parser.eatLastToken()
-		st = Break{Line: line, Column: column}
-	case ContinueKeyword:
-		parser.eatLastToken()
-		st = Continue{Line: line, Column: column}
-	case DeleteKeyword:
-		parser.eatLastToken()
-		st = Delete{Exprs: parser.parseExpressionArray(), Line: line, Column: column}
-	case FunctionKeyword:
-		parser.eatLastToken()
-		st = parser.parseFunctionDec()
-	default:
-		parser.fork(0)
-		expr := parser.parseExpression()
-
-		if token := parser.ReadToken(); token.PrimaryType == AssignmentOperator {
-			parser.moveToFork(0)
-			st = parser.parseAssignment()
-		} else if token.SecondaryType == Colon {
-			parser.moveToFork(0)
-			st = parser.parseDeclaration()
-		} else if token.PrimaryType == Comma {
-			parser.moveToFork(0)
-			st = parser.parseDeclarationOrAssignment()
-		} else {
-			st = expr
-		}
-	}
-
-	return st
-}
-
-func (parser *Parser) parseStatement() Statement {
-	line, column := parser.pos()
-	var st Statement = NullStatement{Line: line, Column: column}
-
-	switch parser.ReadToken().PrimaryType {
-	case IfKeyword:
-		return parser.parseIfElse()
-	case SwitchKeyword:
-		return parser.parseSwitch()
-	case ForKeyword:
-		return parser.parseLoop()
-	/*
-		case DeferKeyword:
-			parser.eatLastToken()
-			st = parser.parseDefer()
-	*/
-	case LeftCurlyBrace:
-		return parser.parseBlock()
-	case FunctionKeyword:
-		parser.eatLastToken()
-		return parser.parseFunctionDec()
-	case ReturnKeyword:
-		st = parser.parseReturn()
-	case BreakKeyword:
-		parser.eatLastToken()
-		st = Break{Line: line, Column: column}
-	case ContinueKeyword:
-		parser.eatLastToken()
-		st = Continue{Line: line, Column: column}
-	case DeleteKeyword:
-		parser.eatLastToken()
-		st = Delete{Exprs: parser.parseExpressionArray(), Line: line, Column: column}
-	case SemiColon:
-		parser.eatLastToken()
-		return NullStatement{}
-	default:
-		parser.fork(0)
-		expr := parser.parseExpression()
-
-		if token := parser.ReadToken(); token.PrimaryType == AssignmentOperator {
-			parser.moveToFork(0)
-			st = parser.parseAssignment()
-		} else if token.SecondaryType == Colon {
-			parser.moveToFork(0)
-			st = parser.parseDeclaration()
-		} else if token.PrimaryType == Comma {
-			parser.moveToFork(0)
-			st = parser.parseDeclarationOrAssignment()
-		} else {
-			st = expr
-		}
-	}
-
-	parser.expect(SemiColon, SecondaryNullType)
-	parser.eatLastToken()
-	return st
-}
-
 func (parser *Parser) parseDefer() Defer {
 	return Defer{Stmt: parser.parseStatement()}
 }
@@ -1190,7 +1220,7 @@ func (parser *Parser) parseExpr(state int) Expression {
 		switch token.PrimaryType {
 		case LeftParen:
 			parser.eatLastToken()
-			expr = parser.parseExpr(0)
+			expr = parser.parseExprOrType()
 
 			parser.expect(RightParen, SecondaryNullType)
 			parser.eatLastToken()
@@ -1202,7 +1232,12 @@ func (parser *Parser) parseExpr(state int) Expression {
 
 		if parser.ReadToken().PrimaryType == LeftCurlyBrace {
 			parser.eatLastToken()
-			return CompoundLiteral{Name: BasicType{Expr: expr, Line: expr.LineM(), Column: expr.ColumnM()}, Data: parser.parseCompoundLiteral(), Line: line, Column: column}
+			switch expr.(type) {
+			case Type:
+				return CompoundLiteral{Name: expr.(Type), Data: parser.parseCompoundLiteral(), Line: line, Column: column}
+			default:
+				return CompoundLiteral{Name: BasicType{Expr: expr, Line: expr.LineM(), Column: expr.ColumnM()}, Data: parser.parseCompoundLiteral(), Line: line, Column: column}
+			}
 		}
 
 		return expr
@@ -1343,9 +1378,9 @@ func (parser *Parser) parseTypeAHH(state int) Type {
 		parser.eatLastToken()
 		return PointerType{BaseType: parser.parseTypeAHH(0), Line: line, Column: column}
 	case 2: // const/dynamic/capture/static keyword
-		if token := parser.ReadToken(); token.PrimaryType == DynamicKeyword {
+		if token := parser.ReadToken(); token.PrimaryType == VecKeyword {
 			parser.eatLastToken()
-			return DynamicType{BaseType: parser.parseTypeAHH(0), Line: line, Column: column}
+			return VecType{BaseType: parser.parseTypeAHH(0), Line: line, Column: column}
 		} else if token.PrimaryType == ConstKeyword {
 			parser.eatLastToken()
 			return ConstType{BaseType: parser.parseTypeAHH(0), Line: line, Column: column}
@@ -1397,4 +1432,16 @@ func (parser *Parser) parseTypeAHH(state int) Type {
 	}
 
 	return nil
+}
+
+func (parser *Parser) parseExprOrType() Expression {
+	switch parser.ReadToken().PrimaryType {
+	case ConstKeyword:
+	case VecKeyword:
+	case LeftBrace:
+		break
+	default:
+		return parser.parseExpr(0)
+	}
+	return parser.parseType()
 }
