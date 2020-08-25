@@ -79,17 +79,20 @@ func (lexer *Lexer) skipUntilNewline() {
 }
 
 func (lexer *Lexer) multilineComment() {
-	for next, _ := lexer.peek(); ; next, _ = lexer.peek() {
-		lexer.eatLastByte()
+	for {
 		lexer.skipSpaces()
 
-		if next != '*' {
+		if next, ok := lexer.peek(); !ok {
+			error.New("Expected end of multiline comment, got eof.", lexer.Line, lexer.Column)
+		} else if next != '*' {
+			lexer.eatLastByte()
 			continue
 		}
+		lexer.eatLastByte()
 
-		if next2, ok := lexer.peek(); !ok {
+		if next, ok := lexer.peek(); !ok {
 			error.New("Expected end of multiline comment, got eof.", lexer.Line, lexer.Column)
-		} else if next2 != '/' {
+		} else if next != '/' {
 			continue
 		}
 
@@ -98,13 +101,50 @@ func (lexer *Lexer) multilineComment() {
 	}
 }
 
+func (lexer *Lexer) skipComments() {
+	if next, _ := lexer.peek(); next != byte('/') {
+		return
+	}
+	lexer.eatLastByte()
+	if next, _ := lexer.peek(); next == byte('/') {
+		lexer.skipUntilNewline()
+	} else if next == '*' {
+		lexer.eatLastByte()
+		lexer.multilineComment()
+	} else {
+		lexer.Position--
+		lexer.Column--
+	}
+}
+
+func (lexer *Lexer) PrepNext() {
+	for {
+		if next, _ := lexer.peek(); IsSpace(next) {
+			lexer.skipSpaces() // skiping spaces/tabs/newlines
+		}
+		if next, _ := lexer.peek(); next == byte('/') {
+			lexer.eatLastByte()
+		} else {
+			break
+		}
+		if next, _ := lexer.peek(); next == '/' {
+			lexer.skipUntilNewline()
+		} else if next == '*' {
+			lexer.multilineComment()
+		} else {
+			lexer.Position--
+			lexer.Column--
+			break
+		}
+	}
+}
+
 // NextToken returns next token
 func (lexer *Lexer) NextToken() Token {
-	lexer.skipSpaces() // skiping spaces/tabs/newlines
-
-	// not sure how the lexer will handle errors
-	if character, ok := lexer.peek(); !ok {
-		// return eof token (tells the parser to stop further parsing)
+	lexer.PrepNext()
+	character, ok := lexer.peek()
+	if !ok {
+		// return eof token (tell the parser to stop further parsing)
 		return Token{PrimaryType: EOF, SecondaryType: SecondaryNullType, Buff: nil, Line: lexer.Line, Column: lexer.Column}
 	} else if IsIdentifierBegining(character) {
 		return lexer.lexWord() // identifier or keyword or macros
@@ -118,16 +158,6 @@ func (lexer *Lexer) NextToken() Token {
 		return lexer.lexChar() // just a single byte
 	} else {
 		if op := lexer.lexOperator(); op.SecondaryType != NotFound {
-			if op.SecondaryType == Div {
-				if next, _ := lexer.peek(); next == byte('/') {
-					lexer.skipUntilNewline()
-					return lexer.NextToken()
-				} else if next == '*' {
-					lexer.eatLastByte()
-					lexer.multilineComment()
-					return lexer.NextToken()
-				}
-			}
 			return op
 		} else if op = lexer.lexDelimiter(); op.SecondaryType != NotFound {
 			return op
@@ -149,12 +179,19 @@ func (lexer *Lexer) lexNumber() Token {
 
 		// check either the number has a base specified or we have to implictly assume it
 		// no need to check for eof
-		if next, _ := lexer.peek(); IsNumDec(next) { // decimal
-			num = append(num, next)
-			lexer.eatLastByte()
-		} else if next == 'd' { // decimal
+		if next, _ := lexer.peek(); next == 'd' { // decimal
 			radix = DecimalRadix
 			lexer.eatLastByte()
+			lexer.eatLastByte()
+
+			if n3, _ := lexer.peek(); n3 == '0' || n3 == '_' {
+				lexer.eatLastByte()
+				for n, _ := lexer.peek(); n == '0' || n == '_'; n, _ = lexer.peek() {
+					lexer.eatLastByte()
+				}
+			} else if !IsNumDec(n3) {
+				num = append(num, '0')
+			}
 		} else if next == 'b' { // binary
 			radix = BinaryRadix
 			lexer.eatLastByte()
@@ -169,6 +206,16 @@ func (lexer *Lexer) lexNumber() Token {
 			lexer.eatLastByte()
 			num = append(num, '0')
 			num = append(num, next)
+		} else if next == '0' {
+			lexer.eatLastByte()
+			if n3, _ := lexer.peek(); n3 == '0' || n3 == '_' {
+				lexer.eatLastByte()
+				for n, _ := lexer.peek(); n == '0' || n == '_'; n, _ = lexer.peek() {
+					lexer.eatLastByte()
+				}
+			} else if !IsNumDec(n3) {
+				num = append(num, '0')
+			}
 		} else {
 			num = append(num, '0')
 		}
@@ -176,26 +223,42 @@ func (lexer *Lexer) lexNumber() Token {
 		num = append(num, character)
 	}
 
+	for m, _ := lexer.peek(); m == '_'; m, _ = lexer.peek() {
+		lexer.eatLastByte()
+	}
+
 	switch radix {
 	case DecimalRadix:
 		for n, _ := lexer.peek(); IsNumDec(n) || n == '.'; n, _ = lexer.peek() {
 			num = append(num, n)
 			lexer.eatLastByte()
+			for n2, _ := lexer.peek(); n2 == '_'; n2, _ = lexer.peek() {
+				lexer.eatLastByte()
+			}
 		}
 	case BinaryRadix:
 		for n, _ := lexer.peek(); IsNumBi(n) || n == '.'; n, _ = lexer.peek() {
 			num = append(num, n)
 			lexer.eatLastByte()
+			for n2, _ := lexer.peek(); n2 == '_'; n2, _ = lexer.peek() {
+				lexer.eatLastByte()
+			}
 		}
 	case OctalRadix:
 		for n, _ := lexer.peek(); IsNumOct(n) || n == '.'; n, _ = lexer.peek() {
 			num = append(num, n)
 			lexer.eatLastByte()
+			for n2, _ := lexer.peek(); n2 == '_'; n2, _ = lexer.peek() {
+				lexer.eatLastByte()
+			}
 		}
 	case HexadecimalRadix:
 		for n, _ := lexer.peek(); IsNumHex(n) || n == '.'; n, _ = lexer.peek() {
 			num = append(num, n)
 			lexer.eatLastByte()
+			for n2, _ := lexer.peek(); n2 == '_'; n2, _ = lexer.peek() {
+				lexer.eatLastByte()
+			}
 		}
 	}
 

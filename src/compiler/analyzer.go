@@ -3,7 +3,6 @@ package compiler
 import (
 	"bytes"
 	"error"
-	"importer"
 	. "parser"
 	"path"
 	"strconv"
@@ -11,736 +10,801 @@ import (
 )
 
 type SemanticAnalyzer struct {
-	Symbols      SymbolTable
-	CurrentScope int
-	NameSp       Namespace
-	Imports      map[string][]byte
+	Symbols        *SymbolTable
+	Imports        map[string]*SymbolTable
+	ImportPrefixes map[string][]byte
+	Exports        *SymbolTable
+	Path           string
+	Index          int
 }
 
-func AnalyzeFile(ast File, pathh string) File {
+func AnalyzeFile(ast File, pathh string) (*SymbolTable, map[string]*SymbolTable, map[string][]byte, *SymbolTable, int) {
+	n := num
+	num++
 	s := SemanticAnalyzer{
-		Symbols: SymbolTable{
-			First: &Node{},
-		},
-		CurrentScope: 0,
-		NameSp:       Namespace{},
-		Imports:      map[string][]byte{},
+		Symbols:        &SymbolTable{},
+		Exports:        &SymbolTable{},
+		Imports:        map[string]*SymbolTable{},
+		ImportPrefixes: map[string][]byte{},
+		Path:           pathh,
+		Index:          num,
 	}
+	s.addSymbol(I8Token, I8Type)
+	s.addSymbol(I16Token, I16Type)
+	s.addSymbol(I32Token, I32Type)
+	s.addSymbol(I64Token, I64Type)
 
-	s.NameSp.Init(path.Dir(pathh))
+	s.addSymbol(U8Token, U8Type)
+	s.addSymbol(U16Token, U16Type)
+	s.addSymbol(U32Token, U32Type)
+	s.addSymbol(U64Token, U64Type)
 
-	newAst := File{}
+	s.addSymbol(F32Token, F32Type)
+	s.addSymbol(F64Token, F64Type)
+
+	s.addSymbol(UptrToken, UptrType)
+
+	s.addSymbol(VoidToken, VoidType)
+	s.addSymbol(SSizeTToken, SSizeTType)
+	s.addSymbol(BoolToken, BoolType)
+
+	s.addSymbol(True.Value, BoolType.Type)
+	s.addSymbol(False.Value, BoolType.Type)
 
 	for _, statement := range ast.Statements {
-		newAst.Statements = append(newAst.Statements, s.statement(statement))
+		s.globalStmt(statement)
 	}
-
-	return newAst
+	return s.Symbols, s.Imports, s.ImportPrefixes, s.Exports, n
 }
 
-func (s *SemanticAnalyzer) getSymbol(Ident Token, Curr bool) *Node {
-	if Curr {
-		return s.Symbols.Find(Ident, s.CurrentScope)
-	}
-	for i := s.CurrentScope; i >= 0; i-- {
-		if symbol := s.Symbols.Find(Ident, i); symbol != nil {
-			return symbol
-		}
-	}
+func (s *SemanticAnalyzer) error(message string, line, column int) {
+	error.New(s.Path+": "+message, line, column)
+}
 
-	return nil
+func (s *SemanticAnalyzer) getSymbol(Ident Token, Curr bool) (Node, bool) {
+	if Curr {
+		return s.Symbols.Find(Ident)
+	}
+	return s.Symbols.FindInAll(Ident)
 }
 
 func (s *SemanticAnalyzer) addSymbol(Ident Token, Type Type) {
-	s.Symbols.Add(&Node{Identifier: Ident, Scope: s.CurrentScope, Type: Type})
+	s.Symbols.Add(Node{Identifier: Ident, Type: Type})
 }
 
 func (s *SemanticAnalyzer) pushScope() {
-	s.CurrentScope++
+	s.Symbols = s.Symbols.NewChild()
 }
 
 func (s *SemanticAnalyzer) popScope() {
-	s.Symbols.DeleteAll(s.CurrentScope)
-	s.CurrentScope--
+	s.Symbols = s.Symbols.Parent
 }
 
-func (s *SemanticAnalyzer) statement(stmt Statement) Statement {
+func (s *SemanticAnalyzer) globalStmt(stmt Statement) {
 	switch stmt.(type) {
 	case Typedef:
-		return s.typedef(stmt.(Typedef))
+		s.typedef(stmt.(Typedef))
 	case Import:
-		return s.imprt(stmt.(Import))
+		s.imprt(stmt.(Import))
 	case Declaration:
-		return s.declaration(stmt.(Declaration))
-	case IfElseBlock:
-		return s.ifElse(stmt.(IfElseBlock))
-	case Loop:
-		return s.loop(stmt.(Loop))
-	case Switch:
-		return s.swtch(stmt.(Switch))
-	case Block:
-		return s.block(stmt.(Block))
-	case Assignment:
-		return s.assignment(stmt.(Assignment))
-	case Return:
-		return s.rturn(stmt.(Return))
-	case Delete:
-		return s.delete(stmt.(Delete))
+		s.declaration(stmt.(Declaration))
 	case ExportStatement:
-		return ExportStatement{Stmt: s.statement(stmt.(ExportStatement).Stmt)}
+		st := stmt.(ExportStatement).Stmt
+		switch st.(type) {
+		case Declaration:
+			s.exportDeclaration(st.(Declaration))
+		case Typedef:
+			s.exportTypedef(st.(Typedef))
+		default:
+			s.error("Invalid export statement, expected typedef or decleration, got {st}", st.LineM(), st.ColumnM())
+		}
+	case NullStatement:
+		break
+	default:
+		s.error("Non-declarative statement outside function body.", stmt.LineM(), stmt.ColumnM())
+	}
+}
+
+func (s *SemanticAnalyzer) stmt(stmt Statement, returnType Type) {
+	switch stmt.(type) {
+	case Declaration:
+		s.declaration(stmt.(Declaration))
+	case IfElseBlock:
+		s.ifElse(stmt.(IfElseBlock), returnType)
+	case Loop:
+		s.loop(stmt.(Loop), returnType)
+	case Switch:
+		s.swtch(stmt.(Switch), returnType)
+	case Block:
+		s.pushScope()
+		s.block(stmt.(Block), returnType)
+		s.popScope()
+	case Assignment:
+		s.assignment(stmt.(Assignment))
+	case Delete:
+		s.delete(stmt.(Delete))
 	case Expression:
-		return s.expr(stmt.(Expression))
+		s.expr(stmt.(Expression))
+	case Return:
+		s.rturn(stmt.(Return), returnType)
 	}
-
-	return stmt
 }
 
-func (s *SemanticAnalyzer) ifElse(ifElse IfElseBlock) IfElseBlock {
-	if ifElse.HasInitStmt {
-		ifElse.InitStatement = s.statement(ifElse.InitStatement)
+func (s *SemanticAnalyzer) basicStmt(stmt Statement) {
+	switch stmt.(type) {
+	case Declaration:
+		s.declaration(stmt.(Declaration))
+	case Assignment:
+		s.assignment(stmt.(Assignment))
+	case Delete:
+		s.delete(stmt.(Delete))
+	case Expression:
+		s.expr(stmt.(Expression))
+	case NullStatement:
+		break
+	default:
+		s.error("Invalid statement {stmt}.", stmt.LineM(), stmt.ColumnM())
 	}
-	ifElse.Conditions = s.exprArray(ifElse.Conditions)
-
-	for x, block := range ifElse.Blocks {
-		ifElse.Blocks[x] = s.block(block)
-	}
-	ifElse.ElseBlock = s.block(ifElse.ElseBlock)
-
-	return ifElse
 }
 
-func (s *SemanticAnalyzer) loop(loop Loop) Loop {
-	if loop.Type&InitLoop == InitLoop {
-		loop.InitStatement = s.statement(loop.InitStatement)
+func (s *SemanticAnalyzer) delete(del Delete) {
+	for _, expr := range del.Exprs {
+		s.expr(expr)
 	}
-	if loop.Type&CondLoop == CondLoop {
-		loop.Condition = s.expr(loop.Condition)
-	}
-	if loop.Type&LoopLoop == LoopLoop {
-		loop.LoopStatement = s.statement(loop.LoopStatement)
-	}
-	loop.Block = s.block(loop.Block)
-	return loop
 }
 
-func (s *SemanticAnalyzer) swtch(swtch Switch) Switch {
-	if swtch.Type == 1 {
-		swtch.InitStatement = s.statement(swtch.InitStatement)
-		swtch.Expr = s.expr(swtch.Expr)
-	}
-
-	for x, Case := range swtch.Cases {
-		swtch.Cases[x].Condition = s.expr(Case.Condition)
-		swtch.Cases[x].Block = s.block(Case.Block)
-	}
-
-	if swtch.HasDefaultCase {
-		swtch.DefaultCase = s.block(swtch.DefaultCase)
-	}
-	return swtch
-}
-
-func (s *SemanticAnalyzer) imprt(stmt Import) Import {
-	for i, Path := range stmt.Paths {
+func (s *SemanticAnalyzer) imprt(stmt Import) {
+	for _, Path := range stmt.Paths {
 		path1 := path.Clean(string(Path.Buff[1 : len(Path.Buff)-1]))
-
-		importer.ImportFile(s.NameSp.BasePath, path1, false, CompileFile, AnalyzeFile)
+		name := strings.Split(path.Base(path1), ".")[0]
 
 		if path.Ext(path1) != ".h" {
-			s.Imports[strings.Split(path.Base(path1), ".")[0]] = []byte(s.NameSp.getLastImportPrefix())
-			path1 += ".h"
+			s.ImportPrefixes[name] = []byte(getLastImportPrefix())
+			s.Imports[name] = ImportFile(path.Dir(s.Path), path1, false, s.Index)
 		}
-		stmt.Paths[i].Buff = []byte(path1)
 	}
-	return stmt
 }
 
-func (s *SemanticAnalyzer) enum(enum EnumType, Name Token) EnumType {
-	s.pushScope()
-	for i, Ident := range enum.Identifiers {
-		enum.Identifiers[i] = s.NameSp.getEnumProp(Name.Buff, Ident)
-	}
-	s.popScope()
-	return enum
-}
-
-func (s *SemanticAnalyzer) typedef(typedef Typedef) Typedef {
-	Typ := typedef.Type
-
-	switch typedef.Type.(type) {
-	case StructType:
-		strct := Typ.(StructType)
-		for _, superStruct := range Typ.(StructType).SuperStructs {
-			for _, prop := range s.getType(superStruct).(Typedef).Type.(StructType).Props {
-				strct.Props = append(strct.Props, prop)
-			}
-		}
-		strct.Name = typedef.Name
-		Typ2 := s.strctNoValue(strct)
-		typedef.Type = Typ2
-		s.addSymbol(typedef.Name, typedef)
-
-		Typ = s.strctValue(Typ2)
-		typedef.DefaultName = s.NameSp.getStrctDefaultName(typedef.Name)
-		return Typedef{DefaultName: typedef.DefaultName, Type: s.typ(Typ), Name: s.NameSp.getNewVarName(typedef.Name)}
-	case TupleType:
-		Typ = s.tupl(Typ.(TupleType))
-	case EnumType:
-		Typ = s.enum(Typ.(EnumType), typedef.Name)
-	case UnionType:
-		Typ = s.union(Typ.(UnionType))
-	}
-
-	s.addSymbol(typedef.Name, typedef)
-	return Typedef{DefaultName: typedef.DefaultName, Type: s.typ(Typ), Name: s.NameSp.getNewVarName(typedef.Name)}
-}
-
-func (s *SemanticAnalyzer) tupl(typ TupleType) TupleType {
-	return TupleType{Types: s.typeArray(typ.Types)}
-}
-
-func (s *SemanticAnalyzer) union(typ UnionType) UnionType {
-	for x, prop := range typ.Identifiers {
-		typ.Identifiers[x] = s.NameSp.getNewVarName(prop)
-	}
-	return UnionType{Identifiers: typ.Identifiers, Types: s.typeArray(typ.Types)}
-}
-
-func (s *SemanticAnalyzer) delete(delete Delete) Delete {
-	return Delete{Exprs: s.exprArray(delete.Exprs)}
-}
-
-func (s *SemanticAnalyzer) rturn(rturn Return) Return {
-	return Return{Values: s.exprArray(rturn.Values)}
-}
-
-func (s *SemanticAnalyzer) assignment(as Assignment) Assignment {
-	return Assignment{Variables: s.exprArray(as.Variables), Op: as.Op, Values: s.exprArray(as.Values)}
-}
-
-func (s *SemanticAnalyzer) block(block Block) Block {
-	s.pushScope()
-	for i, stmt := range block.Statements {
-		block.Statements[i] = s.statement(stmt)
-	}
-	s.popScope()
-	return block
-}
-
-func (s *SemanticAnalyzer) declaration(dec Declaration) Declaration {
+func (s *SemanticAnalyzer) declaration(dec Declaration) {
+	Types := []Type{}
 
 	if len(dec.Types) == 1 {
 		Type := dec.Types[0]
-		for i := 1; i < len(dec.Identifiers); i++ {
-			dec.Types = append(dec.Types, Type)
+
+		if len(dec.Values) == 0 {
+			Types = append(Types, Type)
+		}
+		for _, val := range dec.Values {
+			Types = append(Types, Type)
+			Type2 := s.getType(val)
+			if s.compareTypes(Type2, Type) {
+				continue
+			}
+			s.error("Type mismatch: val has type {Type2}, expected {Type}.", val.LineM(), val.ColumnM())
 		}
 	} else if len(dec.Types) == 0 {
 		if len(dec.Values) == 0 {
-			error.New("Cannot declare a variable without type and value.", dec.Identifiers[0].Line, dec.Identifiers[0].Column)
+			s.error("Cannot declare variable without type.", dec.Identifiers[0].Line, dec.Identifiers[0].Column)
 		}
-		for _, Val := range dec.Values {
-			dec.Types = append(dec.Types, s.getType(Val))
+		for _, val := range dec.Values {
+			Typ := s.getType(val)
+
+			switch Typ.(type) {
+			case NumberType:
+				Typ = I32Type.Type
+			}
+			Types = append(Types, Typ)
 		}
-	}
-
-	for i, typ := range dec.Types {
-		dec.Types[i] = s.typ(typ)
-	}
-
-	if len(dec.Values) > 0 && len(dec.Types) != len(dec.Values) {
-		error.New("Invalid number of types or values specified", dec.Identifiers[0].Line, dec.Identifiers[0].Column)
+	} else if len(dec.Types) != len(dec.Values) {
+		s.error("Invalid number of types or values specified", dec.Identifiers[0].Line, dec.Identifiers[0].Column)
+	} else {
+		Types = dec.Types
 	}
 
 	for i, Ident := range dec.Identifiers {
-		if s.getSymbol(Ident, true) != nil {
-			error.New(string(Ident.Buff)+" has already been declared.", Ident.Line, Ident.Column)
+		if _, ok := s.getSymbol(Ident, true); ok {
+			s.error(string(Ident.Buff)+" has already been declared.", Ident.Line, Ident.Column)
 		} else {
-			s.addSymbol(Ident, dec.Types[i])
-			dec.Identifiers[i] = s.NameSp.getNewVarName(Ident)
+			s.addSymbol(Ident, Types[i])
 		}
 	}
-
-	for i, Val := range dec.Values {
-		dec.Values[i] = s.expr(Val)
+	for _, typ := range Types {
+		s.typ(typ)
 	}
-
-	return dec
+	for _, Val := range dec.Values {
+		s.expr(Val)
+	}
 }
 
-func (s *SemanticAnalyzer) strctPropNoValue(prop Declaration) Declaration {
-	if len(prop.Types) == 1 {
-		Type := prop.Types[0]
-		for i := 1; i < len(prop.Identifiers); i++ {
-			prop.Types = append(prop.Types, Type)
+func (s *SemanticAnalyzer) propDeclaration(dec Declaration) []Type {
+	Types := []Type{}
+
+	if len(dec.Types) == 1 {
+		Type := dec.Types[0]
+
+		if len(dec.Values) == 0 {
+			Types = append(Types, Type)
 		}
-	} else if len(prop.Types) == 0 {
-		if len(prop.Values) == 0 {
-			error.New("Cannot declare a variable without type and value.", prop.Identifiers[0].Line, prop.Identifiers[0].Column)
+		for _, val := range dec.Values {
+			Types = append(Types, Type)
+			Type2 := s.getType(val)
+			if s.compareTypes(Type2, Type) {
+				continue
+			}
+			s.error("Type mismatch: val has type {Type2}, expected {Type}.", val.LineM(), val.ColumnM())
 		}
-		for _, Val := range prop.Values {
-			prop.Types = append(prop.Types, s.getType(Val))
+	} else if len(dec.Types) == 0 {
+		if len(dec.Values) == 0 {
+			s.error("Cannot declare variable without type.", dec.Identifiers[0].Line, dec.Identifiers[0].Column)
 		}
+		for _, val := range dec.Values {
+			Typ := s.getType(val)
+			switch Typ.(type) {
+			case NumberType:
+				Typ = I32Type.Type
+			}
+			Types = append(Types, Typ)
+		}
+	} else if len(dec.Types) != len(dec.Values) {
+		s.error("Invalid number of types or values specified", dec.Identifiers[0].Line, dec.Identifiers[0].Column)
+	} else {
+		Types = dec.Types
 	}
 
-	if len(prop.Values) > 0 && len(prop.Types) != len(prop.Values) {
-		error.New("Invalid number of types or values specified", prop.Identifiers[0].Line, prop.Identifiers[0].Column)
-	}
-
-	for _, Ident := range prop.Identifiers {
-		if s.getSymbol(Ident, true) != nil {
-			error.New(string(Ident.Buff)+" has already been decplared.", Ident.Line, Ident.Column)
+	for i, Ident := range dec.Identifiers {
+		if _, ok := s.getSymbol(getPropName(Ident), true); ok {
+			s.error(string(Ident.Buff)+" has already been declared.", Ident.Line, Ident.Column)
+		} else {
+			s.addSymbol(getPropName(Ident), Types[i])
 		}
 	}
+	for _, typ := range Types {
+		s.typ(typ)
+	}
+	for _, Val := range dec.Values {
+		s.expr(Val)
+	}
 
-	return prop
+	return Types
 }
 
-func (s *SemanticAnalyzer) strctNoValue(strct StructType) StructType {
+func (s *SemanticAnalyzer) exportDeclaration(dec Declaration) {
+	Types := []Type{}
+
+	if len(dec.Types) == 1 {
+		Type := dec.Types[0]
+
+		if len(dec.Values) == 0 {
+			Types = append(Types, Type)
+		}
+		for _, val := range dec.Values {
+			Types = append(Types, Type)
+			Type2 := s.getType(val)
+			if s.compareTypes(Type2, Type) {
+				continue
+			}
+			s.error("Type mismatch: val has type {Type2}, expected {Type}.", val.LineM(), val.ColumnM())
+		}
+	} else if len(dec.Types) == 0 {
+		if len(dec.Values) == 0 {
+			s.error("Cannot declare variable without type.", dec.Identifiers[0].Line, dec.Identifiers[0].Column)
+		}
+		for _, val := range dec.Values {
+			Typ := s.getType(val)
+			switch Typ.(type) {
+			case NumberType:
+				Typ = I32Type.Type
+			}
+			Types = append(Types, Typ)
+		}
+	} else if len(dec.Types) != len(dec.Values) {
+		s.error("Invalid number of types or values specified", dec.Identifiers[0].Line, dec.Identifiers[0].Column)
+	} else {
+		Types = dec.Types
+	}
+	for i, Ident := range dec.Identifiers {
+		if _, ok := s.getSymbol(Ident, true); ok {
+			s.error(string(Ident.Buff)+" has already been declared.", Ident.Line, Ident.Column)
+		} else {
+			s.addSymbol(Ident, Types[i])
+			s.Exports.Add(Node{Identifier: Ident, Type: Types[i]})
+		}
+	}
+
+	for _, typ := range Types {
+		s.typ(typ)
+	}
+	for _, Val := range dec.Values {
+		s.expr(Val)
+	}
+}
+
+func (s *SemanticAnalyzer) ifElse(ifElse IfElseBlock, returnType Type) {
 	s.pushScope()
-	for i, prop := range strct.Props {
-		strct.Props[i] = s.strctPropNoValue(prop)
+	if ifElse.HasInitStmt {
+		s.basicStmt(ifElse.InitStatement)
+	}
+	s.exprArray(ifElse.Conditions)
+	for _, block := range ifElse.Blocks {
+		s.pushScope()
+		s.block(block, returnType)
+		s.popScope()
+	}
+	s.block(ifElse.ElseBlock, returnType)
+	s.popScope()
+}
+
+func (s *SemanticAnalyzer) loop(loop Loop, returnType Type) {
+	s.pushScope()
+	if loop.Type&InitLoop == InitLoop {
+		s.basicStmt(loop.InitStatement)
+	}
+	if loop.Type&CondLoop == CondLoop {
+		s.expr(loop.Condition)
+	}
+	if loop.Type&LoopLoop == LoopLoop {
+		s.basicStmt(loop.LoopStatement)
+	}
+	s.block(loop.Block, returnType)
+	s.popScope()
+}
+
+func (s *SemanticAnalyzer) swtch(swtch Switch, returnType Type) {
+	s.popScope()
+	if swtch.Type == 1 {
+		s.basicStmt(swtch.InitStatement)
+		s.expr(swtch.Expr)
+	}
+	for _, Case := range swtch.Cases {
+		s.expr(Case.Condition)
+		s.block(Case.Block, returnType)
+	}
+	if swtch.HasDefaultCase {
+		s.block(swtch.DefaultCase, returnType)
 	}
 	s.popScope()
-	return strct
 }
 
-func (s *SemanticAnalyzer) strctValue(strct StructType) StructType {
-	for x, prop := range strct.Props {
-		for y, val := range prop.Values {
-			strct.Props[x].Values[y] = s.expr(val)
+func (s *SemanticAnalyzer) block(block Block, returnType Type) {
+	for _, stmt := range block.Statements {
+		s.stmt(stmt, returnType)
+	}
+}
+
+func (s *SemanticAnalyzer) assignment(as Assignment) {
+	s.exprArray(as.Variables)
+	s.exprArray(as.Values)
+
+	for x, vr := range as.Variables {
+		val := as.Values[x]
+		s.expr(val)
+
+		Type1 := s.getType(vr)
+		Type2 := s.getType(val)
+
+		switch Type1.(type) {
+		/*
+			case InternalType:
+				s.error("Cannot assign variable of type {Type1} to a value of type \"InternalType\". Needs type casting.", val.LineM(), val.ColumnM())
+		*/
+		case FuncType:
+			if !Type1.(FuncType).Mut {
+				s.error("Cannot assign to a constant function.", vr.LineM(), vr.ColumnM())
+			}
+		case ConstType:
+			s.error("Cannot assign to constant variable.", vr.LineM(), vr.ColumnM())
 		}
-		for y, typ := range prop.Types {
-			strct.Props[x].Types[y] = s.typ(typ)
+
+		if !s.compareTypes(Type1, Type2) {
+			// s.error("Cannot assign variable of type {Type1} to a value of type {Type2}.", val.LineM(), val.ColumnM())
 		}
 	}
-	return strct
 }
 
-func (s *SemanticAnalyzer) expr(expr Expression) Expression {
-	expr2 := expr
-
+func (s *SemanticAnalyzer) expr(expr Expression) {
 	switch expr.(type) {
 	case IdentExpr:
-		expr2 = IdentExpr{Value: s.NameSp.getNewVarName(expr.(IdentExpr).Value)}
+		tok := expr.(IdentExpr).Value
+		if isInternal(tok) {
+			break
+		}
+		_, ok := s.getSymbol(tok, false)
+		if !ok {
+			s.error("Use of undeclared variable '"+string(tok.Buff)+"'.", tok.Line, tok.Column)
+		}
 	case UnaryExpr:
-		expr2 = UnaryExpr{Op: expr.(UnaryExpr).Op, Expr: s.expr(expr.(UnaryExpr).Expr)}
+		s.expr(expr.(UnaryExpr).Expr)
 	case BinaryExpr:
-		expr2 = BinaryExpr{Left: s.expr(expr.(BinaryExpr).Left), Op: expr.(BinaryExpr).Op, Right: s.expr(expr.(BinaryExpr).Right)}
+		bExpr := expr.(BinaryExpr)
+
+		s.expr(bExpr.Left)
+		s.expr(bExpr.Right)
+
+		lType := s.getType(bExpr.Left)
+		rType := s.getType(bExpr.Right)
+
+		if !s.compareTypes(lType, rType) {
+			s.error("Type mismatch: expected {lType}, got {rType}", bExpr.LineM(), bExpr.ColumnM())
+		}
+		/*
+			switch bExpr.Op.PrimaryType {
+			case AirthmaticOperator:
+
+			}
+		*/
 	case PostfixUnaryExpr:
-		expr2 = PostfixUnaryExpr{Op: expr.(PostfixUnaryExpr).Op, Expr: s.expr(expr.(PostfixUnaryExpr).Expr)}
+		s.expr(expr.(PostfixUnaryExpr).Expr)
 	case TernaryExpr:
-		expr2 = TernaryExpr{Cond: s.expr(expr.(TernaryExpr).Cond), Left: s.expr(expr.(TernaryExpr).Left), Right: s.expr(expr.(TernaryExpr).Right)}
+		s.expr(expr.(TernaryExpr).Cond)
+		s.expr(expr.(TernaryExpr).Left)
+		s.expr(expr.(TernaryExpr).Right)
 	case ArrayLiteral:
-		expr2 = ArrayLiteral{Exprs: s.exprArray(expr.(ArrayLiteral).Exprs)}
+		s.exprArray(expr.(ArrayLiteral).Exprs)
 	case CallExpr:
-		expr2 = CallExpr{Function: s.expr(expr.(CallExpr).Function), Args: s.exprArray(expr.(CallExpr).Args)}
+		s.callExpr(expr.(CallExpr))
 	case TypeCast:
-		expr2 = s.typeCast(expr.(TypeCast))
+		s.typeCast(expr.(TypeCast))
 	case ArrayMemberExpr:
-		expr2 = s.arrayMemberExpr(expr.(ArrayMemberExpr))
+		s.arrayMemberExpr(expr.(ArrayMemberExpr))
 	case MemberExpr:
-		expr2 = s.memberExpr(expr.(MemberExpr))
+		s.memberExpr(expr.(MemberExpr))
 	case LenExpr:
-		expr2 = s.lenExpr(expr.(LenExpr))
+		s.lenExpr(expr.(LenExpr))
 	case SizeExpr:
-		expr2 = s.sizeExpr(expr.(SizeExpr))
+		s.sizeExpr(expr.(SizeExpr))
 	case CompoundLiteral:
-		expr2 = s.compoundLiteral(expr.(CompoundLiteral))
+		s.compoundLiteral(expr.(CompoundLiteral))
 	case FuncExpr:
 		s.pushScope()
+		s.typ(expr.(FuncExpr).Type)
 		for i, arg := range expr.(FuncExpr).Type.ArgNames {
 			s.addSymbol(arg, expr.(FuncExpr).Type.ArgTypes[i])
 		}
-		expr2 = FuncExpr{Block: s.block(expr.(FuncExpr).Block), Type: s.typ(expr.(FuncExpr).Type).(FuncType)}
+		s.block(expr.(FuncExpr).Block, expr.(FuncExpr).Type.ReturnTypes[0])
 		s.popScope()
 	case HeapAlloc:
-		expr2 = HeapAlloc{Type: s.typ(expr.(HeapAlloc).Type)}
+		s.typ(expr.(HeapAlloc).Type)
 	}
-
-	return expr2
 }
 
-func (s *SemanticAnalyzer) typ(typ Type) Type {
+func (s *SemanticAnalyzer) callExpr(expr CallExpr) {
+	s.expr(expr.Function)
+	s.exprArray(expr.Args)
+
+	typ := s.getRootType(s.getType(expr.Function))
+	Args := expr.Args
 
 	switch typ.(type) {
-	case BasicType:
-		return BasicType{Expr: s.expr(typ.(BasicType).Expr)}
-	case PointerType:
-		return PointerType{BaseType: s.typ(typ.(PointerType).BaseType)}
-	case DynamicType:
-		return DynamicType{BaseType: s.typ(typ.(DynamicType).BaseType)}
-	case ConstType:
-		return ConstType{BaseType: s.typ(typ.(ConstType).BaseType)}
-	case ImplictArrayType:
-		return ImplictArrayType{BaseType: s.typ(typ.(ImplictArrayType).BaseType)}
-	case ArrayType:
-		return ArrayType{Size: typ.(ArrayType).Size, BaseType: s.typ(typ.(ArrayType).BaseType)}
 	case FuncType:
-		ArgNames := typ.(FuncType).ArgNames
-		for i, name := range ArgNames {
-			ArgNames[i] = s.NameSp.getNewVarName(name)
-		}
-		return FuncType{Type: typ.(FuncType).Type, ArgTypes: s.typeArray(typ.(FuncType).ArgTypes), ArgNames: ArgNames, ReturnTypes: s.typeArray(typ.(FuncType).ReturnTypes)}
-	case StructType:
-		Typ := typ.(StructType)
-
-		strct := StructType{}
-		strct.Name = Typ.Name
-		strct.Props = make([]Declaration, len(Typ.Props))
-		strct.SuperStructs = Typ.SuperStructs
-
-		for i, prop := range Typ.Props {
-			for j, ident := range prop.Identifiers {
-				switch prop.Types[j].(type) {
-				case FuncType:
-					strct.Props[i].Identifiers = append(strct.Props[i].Identifiers, s.NameSp.getStrctMethodName(Typ.Name, ident))
-				default:
-					strct.Props[i].Identifiers = append(strct.Props[i].Identifiers, s.NameSp.getNewVarName(ident))
-				}
-			}
-			strct.Props[i].Types = prop.Types
-			strct.Props[i].Values = prop.Values
-		}
-		return strct
-	}
-
-	return typ
-}
-
-func (s *SemanticAnalyzer) typeArray(types []Type) []Type {
-	typs := []Type{}
-	for _, typ := range types {
-		typs = append(typs, s.typ(typ))
-	}
-	return typs
-}
-
-func (s *SemanticAnalyzer) typeCast(expr TypeCast) TypeCast {
-	return TypeCast{Type: s.typ(expr.Type), Expr: s.expr(expr.Expr)}
-	/*
-		switch expr.Type.(type) {
-		case BasicType:
+		break
+	case PointerType:
+		t := s.getRootType(typ.(PointerType).BaseType)
+		switch t.(type) {
+		case FuncType:
+			typ = t
 			break
 		default:
-			return TypeCast{Type: s.typ(expr.Type), Expr: s.expr(expr.Expr)}
+			s.error("{expr} is a pointer to a non-function type.", expr.LineM(), expr.ColumnM())
 		}
-
-		Typ := s.getType(expr.Type.(BasicType).Expr)
-
-		switch Typ.(type) {
-		case StructType:
-			break
-		default:
-			return TypeCast{Type: s.typ(expr.Type), Expr: s.expr(expr.Expr)}
-		}
-
-		return TypeCast{
-			Type: expr.Type,
-			Expr: UnaryExpr{
-				Op: Token{Buff: []byte("*"), PrimaryType: AirthmaticOperator, SecondaryType: Mul},
-				Expr: TypeCast{
-					Type: PointerType{BaseType: expr.Type},
-					Expr: BinaryExpr{
-						Left: UnaryExpr{Op: Token{Buff: []byte("&"), PrimaryType: BitwiseOperator, SecondaryType: And}, Expr: s.expr(expr)},
-						Op:   Token{Buff: []byte("+"), PrimaryType: AirthmaticOperator, SecondaryType: Add},
-						Right: CallExpr{
-							Function: IdentExpr{Value: Token{Buff: []byte("offsetof"), PrimaryType: Identifier}},
-							Args:     []Expression{expr.Type.(BasicType).Expr, Typ.(StructType).Props[0].Types[0]},
-						},
-					},
-				},
-			},
-		}
-	*/
-}
-
-func (s *SemanticAnalyzer) compoundLiteral(expr CompoundLiteral) CompoundLiteral {
-	Name := s.expr(expr.Name)
-	Typ := s.getType(Name)
-
-	if Typ == nil {
-		error.New("Unknown Type.", 0, 0)
-	}
-
-	switch Typ.(type) {
-	case Typedef:
-		break
+	case InternalType:
+		return
 	default:
-		error.New("Unexpected expression. Expected struct or tuple type.", 0, 0)
+		s.error("{expr} is not a function or function pointer.", expr.LineM(), expr.ColumnM())
 	}
 
-	switch Typ.(Typedef).Type.(type) {
-	case StructType:
-		break
-	case TupleType:
-		return CompoundLiteral{Name: Name, Data: s.compoundLiteralData(expr.Data)}
-	default:
-		error.New("Unexpected expression. Expected struct or tuple type.", 0, 0)
+	l := len(expr.Args)
+	l2 := len(typ.(FuncType).ArgTypes)
+
+	first := typ.(FuncType).ArgTypes[0]
+	if s.compareTypes(first, VoidType.Type) {
+		l2--
 	}
 
-	strct := Typ.(Typedef).Type.(StructType)
-	data := s.compoundLiteralData(expr.Data)
-
-	if len(data.Fields) == 0 && len(data.Values) > 0 {
-		x := 0
-		l := len(data.Values)
-
-		for _, prop := range strct.Props {
-			for j, Ident := range prop.Identifiers {
-
-				switch prop.Types[j].(type) {
-				case FuncType:
-					continue
-				}
-				data.Fields = append(data.Fields, Ident)
-				x++
-				if x <= l {
-					continue
-				}
-				data.Values = append(data.Values, MemberExpr{
-					Base: IdentExpr{Value: s.NameSp.getStrctDefaultName(Typ.(Typedef).Name)},
-					Expr: IdentExpr{Value: Ident},
-				})
-			}
-		}
-	} else {
-		for _, prop := range strct.Props {
-			for j, Ident := range prop.Identifiers {
-
-				if hasField(data.Fields, Ident) {
-					continue
-				}
-				switch prop.Types[j].(type) {
-				case FuncType:
-					continue
-				}
-
-				data.Fields = append(data.Fields, Ident)
-				data.Values = append(data.Values, MemberExpr{
-					Base: IdentExpr{Value: s.NameSp.getStrctDefaultName(Typ.(Typedef).Name)},
-					Expr: IdentExpr{Value: Ident},
-				})
-			}
-		}
-	}
-
-	return CompoundLiteral{Name: Name, Data: data}
-}
-
-func hasField(fields []Token, field Token) bool {
-	for _, tok := range fields {
-		if bytes.Compare(tok.Buff, field.Buff) == 0 {
-			return true
-		}
-	}
-	return false
-}
-
-func (s *SemanticAnalyzer) compoundLiteralData(data CompoundLiteralData) CompoundLiteralData {
-	for i, Val := range data.Values {
-		data.Values[i] = s.expr(Val)
-	}
-	for i, Field := range data.Fields {
-		data.Fields[i] = s.NameSp.getNewVarName(Field)
-	}
-	return data
-}
-
-func (s *SemanticAnalyzer) arrayMemberExpr(expr ArrayMemberExpr) Expression {
-	Typ := s.getType(expr)
-
-	switch Typ.(type) {
-	case BasicType:
-		break
-	default:
-		return ArrayMemberExpr{Parent: s.decayToPointer(s.expr(expr.Parent)), Index: s.expr(expr.Index)}
-	}
-
-	Typ = s.getType(Typ.(BasicType).Expr)
-
-	if Typ == nil {
-		return ArrayMemberExpr{Parent: s.decayToPointer(s.expr(expr.Parent)), Index: s.expr(expr.Index)}
-	}
-
-	switch Typ.(type) {
-	case Typedef:
-		break
-	default:
-		return ArrayMemberExpr{Parent: s.decayToPointer(s.expr(expr.Parent)), Index: s.expr(expr.Index)}
-	}
-
-	switch Typ.(Typedef).Type.(type) {
-	case TupleType:
-		break
-	default:
-		return ArrayMemberExpr{Parent: s.decayToPointer(s.expr(expr.Parent)), Index: s.expr(expr.Index)}
-	}
-
-	switch expr.Index.(type) {
-	case BasicLit:
-		break
-	default:
-		error.New("Only number literals are allowed in tupl element reference.", 0, 0)
-	}
-
-	switch expr.Index.(BasicLit).Value.PrimaryType {
-	case NumberLiteral:
-		break
-	default:
-		error.New("Only number literals are allowed in tupl element reference.", 0, 0)
-	}
-
-	return MemberExpr{
-		Base: s.expr(expr.Parent),
-		Expr: IdentExpr{Value: Token{Buff: []byte("_" + string(expr.Index.(BasicLit).Value.Buff)), PrimaryType: Identifier}},
-	}
-}
-
-func (s *SemanticAnalyzer) lenExpr(expr LenExpr) LenExpr {
-	Expr := s.expr(expr.Expr)
-	return LenExpr{Expr: Expr, Type: s.getType(Expr)}
-}
-
-func (s *SemanticAnalyzer) sizeExpr(expr SizeExpr) SizeExpr {
-	Expr := s.expr(expr.Expr)
-	return SizeExpr{Expr: Expr, Type: s.getType(Expr)}
-}
-
-func (s *SemanticAnalyzer) memberExpr(expr MemberExpr) Expression {
-
-	switch expr.Expr.(type) {
-	case ArrayMemberExpr:
+	switch expr.Function.(type) {
 	case MemberExpr:
-	case IdentExpr:
-	case CallExpr:
-		break
-	default:
-		error.New("Unexpected token.", 0, 0)
-	}
+		base := expr.Function.(MemberExpr).Base
+		typ2 := s.getRootType(s.getType(base))
 
-	switch expr.Base.(type) {
-	case IdentExpr:
-		val, ok := s.Imports[string(expr.Base.(IdentExpr).Value.Buff)]
-		if !ok {
-			break
-		}
-		switch expr.Expr.(type) {
-		case MemberExpr:
-			return MemberExpr{
-				Base: IdentExpr{Value: s.NameSp.joinName(val, expr.Expr.(MemberExpr).Base.(IdentExpr).Value)},
-				Expr: s.expr(expr.Expr.(MemberExpr).Expr),
-			}
-		case CallExpr:
-			return CallExpr{
-				Function: IdentExpr{Value: s.NameSp.joinName(val, expr.Expr.(CallExpr).Function.(IdentExpr).Value)},
-				Args:     s.exprArray(expr.Expr.(CallExpr).Args),
-			}
-		case ArrayMemberExpr:
-			return ArrayMemberExpr{
-				Parent: IdentExpr{Value: s.NameSp.joinName(val, expr.Expr.(ArrayMemberExpr).Parent.(IdentExpr).Value)},
-				Index:  s.expr(expr.Expr.(ArrayMemberExpr).Index),
-			}
-		case IdentExpr:
-			return IdentExpr{Value: s.NameSp.joinName(val, expr.Expr.(IdentExpr).Value)}
-		}
-	}
-
-	Typ := s.getType(expr.Base)
-
-	switch Typ.(type) {
-	case Typedef:
-		switch Typ.(Typedef).Type.(type) {
-		case EnumType:
-			return IdentExpr{Value: s.NameSp.getEnumProp(expr.Base.(IdentExpr).Value.Buff, expr.Expr.(IdentExpr).Value)}
-		}
-	default:
-		isPointer := false
-
-		switch Typ.(type) {
-		case PointerType:
-			Typ = Typ.(PointerType).BaseType
-			isPointer = true
-		}
-
-		Typ = s.getType(Typ.(BasicType).Expr)
-
-		switch Typ.(type) {
-		case Typedef:
-			Typ = Typ.(Typedef).Type
-		default:
-			return MemberExpr{Base: s.expr(expr.Base), Expr: s.expr(expr.Expr)}
-		}
-		switch Typ.(type) {
+		switch first.(type) {
 		case StructType:
-			break
-		default:
-			return MemberExpr{Base: s.expr(expr.Base), Expr: s.expr(expr.Expr)}
-		}
-
-		typ := Typ.(StructType)
-		s.pushScope()
-		defer s.popScope()
-
-		for _, prop := range typ.Props {
-			for x, ident := range prop.Identifiers {
-				s.addSymbol(s.NameSp.getActualName(ident), prop.Types[x])
+			switch typ2.(type) {
+			case StructType:
+				l++
+				Args = append([]Expression{base}, expr.Args...)
+			case PointerType:
+				l++
+				Args = append([]Expression{UnaryExpr{Expr: base, Op: Token{Buff: []byte("*"), PrimaryType: AirthmaticOperator, SecondaryType: Mul}}}, expr.Args...)
+			case DynamicType:
+				l++
+				Args = append([]Expression{UnaryExpr{Expr: base, Op: Token{Buff: []byte("*"), PrimaryType: AirthmaticOperator, SecondaryType: Mul}}}, expr.Args...)
 			}
-		}
+		case PointerType:
+			typ3 := s.getRootType(first.(PointerType).BaseType)
 
-		switch expr.Expr.(type) {
-		case CallExpr:
-			return CallExpr{Function: IdentExpr{Value: s.NameSp.getStrctMethodName(Typ.(StructType).Name, expr.Expr.(CallExpr).Function.(IdentExpr).Value)}, Args: append([]Expression{s.expr(expr.Base)}, s.exprArray(expr.Expr.(CallExpr).Args)...)}
-		case IdentExpr:
-			ident := expr.Expr.(IdentExpr).Value
-
-			for _, prop := range Typ.(StructType).Props {
-				for x, Type := range prop.Types {
-					switch Type.(type) {
-					case FuncType:
-						break
-					default:
-						continue
-					}
-					if bytes.Compare(s.NameSp.getActualName(prop.Identifiers[x]).Buff, s.NameSp.getActualName(ident).Buff) != 0 {
-						continue
-					}
-					return IdentExpr{Value: s.NameSp.getStrctMethodName(Typ.(StructType).Name, ident)}
+			switch typ3.(type) {
+			case StructType:
+				switch typ2.(type) {
+				case StructType:
+					l++
+					Args = append([]Expression{UnaryExpr{Expr: base, Op: Token{Buff: []byte("&"), PrimaryType: BitwiseOperator, SecondaryType: And}}}, expr.Args...)
+				case PointerType:
+					l++
+					Args = append([]Expression{base}, expr.Args...)
+				case DynamicType:
+					l++
+					Args = append([]Expression{base}, expr.Args...)
 				}
 			}
 		}
-		if isPointer {
-			return PointerMemberExpr{Base: s.expr(expr.Base), Expr: s.expr(expr.Expr)}
+	}
+
+	if l2 > l {
+		s.error("Too few arguments in function call.", expr.LineM(), expr.ColumnM())
+	} else if l2 < l {
+		s.error("Too many arguments in function call.", expr.LineM(), expr.ColumnM())
+	}
+
+	for x, e := range Args {
+		t1 := s.getType(e)
+		t2 := typ.(FuncType).ArgTypes[x]
+
+		if !s.compareTypes(t1, t2) {
+			// s.error("Cannot pass expression of type {t} as an argument of type {t2}.", e.LineM(), e.ColumnM())
 		}
 	}
-	return MemberExpr{Base: s.expr(expr.Base), Expr: s.expr(expr.Expr)}
 }
 
-func (s *SemanticAnalyzer) exprArray(array []Expression) []Expression {
-	Exprs := []Expression{}
-	for _, Expr := range array {
-		Exprs = append(Exprs, s.expr(Expr))
-	}
-	return Exprs
-}
-
-func (s *SemanticAnalyzer) decayToPointer(expr Expression) Expression {
-	Typ := s.getType(expr)
+func (s *SemanticAnalyzer) arrayMemberExpr(expr ArrayMemberExpr) {
+	Typ := s.getRootType(s.getType(expr.Parent))
 
 	switch Typ.(type) {
+	case ArrayType:
+	case ImplictArrayType:
+	case PointerType:
 	case DynamicType:
-		switch Typ.(DynamicType).BaseType.(type) {
-		case ImplictArrayType:
-			return TypeCast{
-				Type: PointerType{BaseType: Typ.(DynamicType).BaseType.(ImplictArrayType).BaseType},
-				Expr: MemberExpr{Base: expr, Expr: IdentExpr{Value: Token{Buff: []byte("_ptr"), PrimaryType: Identifier}}},
+		break
+	default:
+		s.error("Type mismatch: expected an array type, got {Typ}.", Typ.LineM(), Typ.ColumnM())
+	}
+}
+
+func (s *SemanticAnalyzer) memberExpr(expr MemberExpr) {
+
+	Typ1 := s.getType(expr.Base)
+
+	if Typ1 == nil {
+		switch expr.Base.(type) {
+		case IdentExpr:
+			if n, ok := s.Imports[string(expr.Base.(IdentExpr).Value.Buff)]; ok {
+				if _, ok := n.Find(expr.Prop); !ok {
+					s.error("'"+string(expr.Prop.Buff)+"' is not exported from '"+string(expr.Base.(IdentExpr).Value.Buff)+"'.", expr.Prop.Line, expr.Prop.Column)
+				}
+				return
 			}
 		}
-		return TypeCast{
-			Type: PointerType{BaseType: Typ.(DynamicType).BaseType},
-			Expr: MemberExpr{Base: expr, Expr: IdentExpr{Value: Token{Buff: []byte("_ptr"), PrimaryType: Identifier}}},
+	}
+
+	isImported := false
+	base := Expression(nil)
+
+	switch Typ1.(type) {
+	case PointerType:
+		Typ1 = Typ1.(PointerType).BaseType
+	}
+
+	switch Typ1.(type) {
+	case BasicType:
+		switch Typ1.(BasicType).Expr.(type) {
+		case MemberExpr:
+			if _, ok := s.ImportPrefixes[string(Typ1.(BasicType).Expr.(MemberExpr).Base.(IdentExpr).Value.Buff)]; ok {
+				isImported = true
+				base = Typ1.(BasicType).Expr.(MemberExpr).Base
+			}
 		}
 	}
-	return expr
+
+	Typ := s.getRootType(Typ1)
+
+	switch Typ.(type) {
+	case EnumType:
+		for _, prop := range Typ.(EnumType).Identifiers {
+			if bytes.Compare(prop.Buff, expr.Prop.Buff) == 0 {
+				return
+			}
+		}
+		s.error("Enum {expr.Base} has no member called '"+string(expr.Prop.Buff)+"'.", expr.Prop.Line, expr.Prop.Column)
+	case StructType:
+		if isImported {
+			Typ8 := Typ.(StructType)
+			Typ9 := StructType{}
+			Typ9.Props = Typ8.Props
+			Typ9.SuperStructs = make([]Expression, len(Typ8.SuperStructs))
+
+			for i, e := range Typ8.SuperStructs {
+				switch e.(type) {
+				case IdentExpr:
+					Typ9.SuperStructs[i] = MemberExpr{Base: base, Prop: e.(IdentExpr).Value}
+				default:
+					Typ9.SuperStructs[i] = e
+				}
+			}
+			s.getPropType(expr.Prop, Typ9)
+		}
+		s.getPropType(expr.Prop, Typ.(StructType))
+	}
+}
+
+func (s *SemanticAnalyzer) compoundLiteral(cl CompoundLiteral) {
+	Typ := s.getRootType(cl.Name)
+
+	switch Typ.(type) {
+	case InternalType:
+		break
+	case StructType:
+		// ahh so much work NEEDS WORK AAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+	case TupleType:
+		tupl := Typ.(TupleType)
+
+		if len(cl.Data.Fields) != 0 {
+			field1 := cl.Data.Fields[0]
+			s.error("Named properties aren't allowed in tuple compound literals.", field1.Line, field1.Column)
+		}
+
+		l1 := len(cl.Data.Values)
+		l2 := len(tupl.Types)
+
+		if l1 > l2 {
+			s.error("Too many fields in compound literal. Expected "+strconv.Itoa(l2)+", got "+strconv.Itoa(l1)+".", cl.LineM(), cl.ColumnM())
+		}
+		if l1 < l2 {
+			s.error("Too few fields in compound literal. Expected "+strconv.Itoa(l2)+", got "+strconv.Itoa(l1)+".", cl.LineM(), cl.ColumnM())
+		}
+
+		for x, val := range cl.Data.Values {
+			Type1 := s.getType(val)
+			Type2 := Typ.(TupleType).Types[x]
+
+			if !s.compareTypes(Type1, Type2) {
+				s.error("Type mismatch: tuple has type {Type2} at index {x} but got {Type1}.", val.LineM(), val.ColumnM())
+			}
+		}
+	default:
+		s.error("Invalid type in compound literal. Expected struct or tuple type, got {Typ}.", Typ.LineM(), Typ.ColumnM())
+	}
+}
+
+func (s *SemanticAnalyzer) rturn(stmt Return, returnType Type) {
+	s.exprArray(stmt.Values)
+	typ := s.getType(stmt.Values[0])
+
+	if !s.compareTypes(typ, returnType) {
+		s.error("Type mismatch: return statement returns {typ} but function has return type {returnType}", typ.LineM(), typ.ColumnM())
+	}
+}
+
+func (s *SemanticAnalyzer) typedef(typedef Typedef) {
+	s.addSymbol(typedef.Name, typedef)
+	switch typedef.Type.(type) {
+	case StructType:
+		s.pushScope()
+		s.typ(typedef.Type)
+		s.popScope()
+	default:
+		s.typ(typedef.Type)
+	}
+}
+
+func (s *SemanticAnalyzer) exportTypedef(typedef Typedef) {
+	s.addSymbol(typedef.Name, typedef)
+	switch typedef.Type.(type) {
+	case StructType:
+		s.pushScope()
+		s.typ(typedef.Type)
+		s.popScope()
+	default:
+		s.typ(typedef.Type)
+	}
+	s.Exports.Add(Node{Identifier: typedef.Name, Type: typedef})
+}
+
+func (s *SemanticAnalyzer) exprArray(exprs []Expression) {
+	for _, expr := range exprs {
+		s.expr(expr)
+	}
+}
+
+func (s *SemanticAnalyzer) typ(typ Type) {
+	switch typ.(type) {
+	case BasicType:
+		s.expr(typ.(BasicType).Expr)
+	case PointerType:
+		s.typ(typ.(PointerType).BaseType)
+	case DynamicType:
+		s.typ(typ.(DynamicType).BaseType)
+	case CaptureType:
+		s.typ(typ.(CaptureType).BaseType)
+	case StaticType:
+		s.typ(typ.(StaticType).BaseType)
+	case ConstType:
+		s.typ(typ.(ConstType).BaseType)
+	case ImplictArrayType:
+		s.typ(typ.(ImplictArrayType).BaseType)
+	case ArrayType:
+		s.typ(typ.(ArrayType).BaseType)
+	case FuncType:
+		if len(typ.(FuncType).ReturnTypes) > 1 {
+			s.error("Multiple return values are not yet supported.", typ.LineM(), typ.ColumnM())
+		}
+		for _, t := range typ.(FuncType).ReturnTypes {
+			s.typ(t)
+		}
+		for _, t := range typ.(FuncType).ArgTypes {
+			s.typ(t)
+		}
+	case StructType:
+		for x, prop := range typ.(StructType).Props {
+			typ.(StructType).Props[x].Types = s.propDeclaration(prop)
+		}
+		for _, superSt := range typ.(StructType).SuperStructs {
+			Typ1 := s.getType(superSt)
+
+			switch Typ1.(type) {
+			case Typedef:
+				break
+			default:
+				s.error("Expected a struct typedef, got {Typ1}.", superSt.LineM(), superSt.ColumnM())
+			}
+			Typ2 := s.getRootType(Typ1)
+
+			switch Typ2.(type) {
+			case StructType:
+				break
+			default:
+				s.error("Expected a struct, got {Typ2}.", superSt.LineM(), superSt.ColumnM())
+			}
+			s.typ(Typ2)
+		}
+	case UnionType:
+		union := typ.(UnionType)
+		s.pushScope()
+		for i, t := range union.Types {
+			s.typ(t)
+			ident := getPropName(union.Identifiers[i])
+			if _, ok := s.getSymbol(ident, true); ok {
+				s.error("Repeated field {ident} in union {union}.", ident.Line, ident.Column)
+			}
+			s.addSymbol(ident, t)
+		}
+		s.popScope()
+	case EnumType:
+		enum := typ.(EnumType)
+		s.pushScope()
+		for x, ident := range enum.Identifiers {
+			val := enum.Values[x]
+			if val != nil {
+				s.expr(val)
+			}
+			if _, ok := s.getSymbol(ident, true); ok {
+				s.error("Repeated field {ident} in enum {enum}.", ident.Line, ident.Column)
+			}
+			s.addSymbol(ident, enum)
+		}
+		s.popScope()
+	case TupleType:
+		tuple := typ.(TupleType)
+		for _, typ := range tuple.Types {
+			switch typ.(type) {
+			case BasicType:
+				typ2 := s.getType(typ.(BasicType).Expr)
+				switch typ2.(type) {
+				case Typedef:
+					break
+				default:
+					s.error("Burh gib type.", typ2.LineM(), typ2.ColumnM())
+				}
+			}
+		}
+	}
 }
 
 func (s *SemanticAnalyzer) getType(expr Expression) Type {
@@ -748,8 +812,9 @@ func (s *SemanticAnalyzer) getType(expr Expression) Type {
 	case BasicLit:
 		switch expr.(BasicLit).Value.PrimaryType {
 		case CharLiteral:
+			return NumberType{}
 		case NumberLiteral:
-			return BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("i64"), PrimaryType: Identifier}}}
+			return NumberType{}
 		case StringLiteral:
 			return ArrayType{
 				Size:     Token{Buff: []byte(strconv.Itoa(expr.(BasicLit).Value.Flags)), PrimaryType: NumberLiteral, SecondaryType: DecimalRadix},
@@ -758,23 +823,51 @@ func (s *SemanticAnalyzer) getType(expr Expression) Type {
 		}
 	case IdentExpr:
 		Ident := expr.(IdentExpr).Value
+		if isInternal(Ident) {
+			return InternalType{}
+		}
+		sym, ok := s.getSymbol(Ident, false)
+		if ok {
+			return sym.Type
+		}
+		if _, ok := s.Imports[string(Ident.Buff)]; ok {
+			return nil
+		}
+		s.error("Use of undeclared variable '"+string(Ident.Buff)+"'.", Ident.Line, Ident.Column)
+	case BinaryExpr:
+		lt := s.getType(expr.(BinaryExpr).Left)
 
-		var symbol *Node
-		if Ident.Flags != 0 {
-			symbol = s.getSymbol(s.NameSp.getActualName(Ident), false)
-		} else {
-			symbol = s.getSymbol(Ident, false)
+		switch lt.(type) {
+		case NumberType:
+		case InternalType:
+			break
+		default:
+			return lt
 		}
-		if symbol != nil {
-			return symbol.Type
-		}
+		return s.getType(expr.(BinaryExpr).Right)
 	case TernaryExpr:
-		return s.getType(expr.(TernaryExpr).Left)
+		lt := s.getType(expr.(TernaryExpr).Left)
+
+		switch lt.(type) {
+		case NumberType:
+		case InternalType:
+			break
+		default:
+			return lt
+		}
+		return s.getType(expr.(TernaryExpr).Right)
 	case TypeCast:
 		return expr.(TypeCast).Type
 	case UnaryExpr:
 		if expr.(UnaryExpr).Op.SecondaryType == Mul {
-			return s.getType(expr.(UnaryExpr).Expr).(PointerType).BaseType
+			Typ := s.getType(expr.(UnaryExpr).Expr)
+			switch Typ.(type) {
+			case PointerType:
+				return Typ.(PointerType).BaseType
+			case DynamicType:
+				return Typ.(DynamicType).BaseType
+			}
+			s.error("{expr} is not a pointer.", expr.LineM(), expr.ColumnM())
 		} else if expr.(UnaryExpr).Op.SecondaryType == And {
 			return PointerType{BaseType: s.getType(expr.(UnaryExpr).Expr)}
 		} else {
@@ -783,7 +876,13 @@ func (s *SemanticAnalyzer) getType(expr Expression) Type {
 	case PostfixUnaryExpr:
 		return s.getType(expr.(PostfixUnaryExpr).Expr)
 	case CallExpr:
-		return s.getType(expr.(CallExpr).Function).(FuncType).ReturnTypes[0]
+		Typ := s.getType(expr.(CallExpr).Function)
+
+		switch Typ.(type) {
+		case InternalType:
+			return InternalType{}
+		}
+		return Typ.(FuncType).ReturnTypes[0]
 	case ArrayMemberExpr:
 		Typ := s.getType(expr.(ArrayMemberExpr).Parent)
 
@@ -806,15 +905,456 @@ func (s *SemanticAnalyzer) getType(expr Expression) Type {
 	case FuncExpr:
 		return expr.(FuncExpr).Type
 	case HeapAlloc:
+		s.typ(expr.(HeapAlloc).Type)
+
 		switch expr.(HeapAlloc).Type.(type) {
 		case ArrayType:
-			return DynamicType{BaseType: ImplictArrayType{BaseType: expr.(HeapAlloc).Type.(ArrayType).BaseType}}
+			return PointerType{BaseType: expr.(HeapAlloc).Type.(ArrayType).BaseType}
 		default:
-			return DynamicType{BaseType: expr.(HeapAlloc).Type}
+			return expr.(HeapAlloc).Type
 		}
 	case CompoundLiteral:
-		return BasicType{Expr: s.expr(expr.(CompoundLiteral).Name)}
+		return expr.(CompoundLiteral).Name
+	case MemberExpr:
+		switch expr.(MemberExpr).Base.(type) {
+		case IdentExpr:
+			Ident := expr.(MemberExpr).Base.(IdentExpr).Value
+			if _, ok := s.getSymbol(Ident, false); ok {
+				break
+			}
+			if t, ok := s.Imports[string(Ident.Buff)]; ok {
+				sym, ok := t.Find(expr.(MemberExpr).Prop)
+				if ok {
+					return s.ofNamespace(sym.Type, expr.(MemberExpr).Base, t)
+				}
+				s.error("'"+string(expr.(MemberExpr).Prop.Buff)+"' is not exported from '"+string(Ident.Buff)+"'.", expr.LineM(), expr.ColumnM())
+			}
+		}
+
+		Typ := s.getType(expr.(MemberExpr).Base)
+		isImported := false
+		var base Expression
+		var table *SymbolTable
+
+		switch Typ.(type) {
+		case PointerType:
+			Typ = Typ.(PointerType).BaseType
+		case DynamicType:
+			Typ = Typ.(DynamicType).BaseType
+		case Typedef:
+			return Typ.(Typedef).Type // only happens with enums
+		}
+
+		switch Typ.(BasicType).Expr.(type) {
+		case MemberExpr:
+			if t, ok := s.Imports[string(Typ.(BasicType).Expr.(MemberExpr).Base.(IdentExpr).Value.Buff)]; ok {
+				isImported = true
+				table = t
+				base = Typ.(BasicType).Expr.(MemberExpr).Base
+			}
+		}
+
+		Typ7 := s.getRootType(Typ)
+
+		switch Typ7.(type) {
+		case StructType:
+			if isImported {
+				Typ8 := Typ7.(StructType)
+				Typ9 := StructType{}
+				Typ9.Props = Typ8.Props
+				Typ9.SuperStructs = make([]Expression, len(Typ8.SuperStructs))
+
+				for i, e := range Typ8.SuperStructs {
+					switch e.(type) {
+					case IdentExpr:
+						Typ9.SuperStructs[i] = MemberExpr{Base: base, Prop: e.(IdentExpr).Value}
+					default:
+						Typ9.SuperStructs[i] = e
+					}
+				}
+				return s.ofNamespace(s.getPropType(expr.(MemberExpr).Prop, Typ9), base, table)
+			}
+			return s.getPropType(expr.(MemberExpr).Prop, Typ7.(StructType))
+		case UnionType:
+			for x, prop := range Typ.(UnionType).Identifiers {
+				if bytes.Compare(prop.Buff, expr.(MemberExpr).Prop.Buff) == 0 {
+					return Typ.(UnionType).Types[x]
+				}
+			}
+		}
 	}
 
-	return BasicType{}
+	return nil
+}
+
+func (s *SemanticAnalyzer) getPropType(Prop Token, strct StructType) Type {
+	for _, prop := range strct.Props {
+		for x, ident := range prop.Identifiers {
+			if bytes.Compare(ident.Buff, Prop.Buff) != 0 {
+				continue
+			}
+			if len(prop.Types) == 0 {
+				return s.getType(prop.Values[x])
+			} else if len(prop.Types) == 1 {
+				return prop.Types[0]
+			} else {
+				return prop.Types[x]
+			}
+		}
+	}
+	for _, superSt := range strct.SuperStructs {
+		Typ1 := s.getType(superSt)
+
+		switch Typ1.(type) {
+		case Typedef:
+			break
+		default:
+			s.error("Expected a struct typedef, got {Typ1}.", superSt.LineM(), superSt.ColumnM())
+		}
+		Typ2 := s.getRootType(Typ1)
+
+		switch Typ2.(type) {
+		case StructType:
+			break
+		default:
+			s.error("Expected a struct, got {Typ2}.", superSt.LineM(), superSt.ColumnM())
+		}
+
+		return s.getPropType(Prop, Typ2.(StructType))
+	}
+	s.error("struct {expr.Base} has no member called {expr.Prop}", Prop.Line, Prop.Column)
+	return nil
+}
+
+func (s *SemanticAnalyzer) compareTypes(Type1 Type, Type2 Type) bool {
+	switch Type2.(type) {
+	case InternalType:
+		return true
+	case NumberType:
+		root := s.getRootType(Type1)
+
+		switch root.(type) {
+		case NumberType:
+			return true
+		case InternalType:
+			return true
+		case BasicType:
+			switch root.(BasicType).Expr.(type) {
+			case IdentExpr:
+				for _, buff := range GlobalTypes {
+					if bytes.Compare([]byte(buff), root.(BasicType).Expr.(IdentExpr).Value.Buff) == 0 {
+						return true
+					}
+				}
+			}
+		}
+		return false
+	case CaptureType:
+		switch Type1.(type) {
+		case CaptureType:
+			return s.compareTypes(Type1.(CaptureType).BaseType, Type2.(CaptureType).BaseType)
+		}
+		return s.compareTypes(Type1, Type2.(CaptureType).BaseType)
+	case StaticType:
+		switch Type1.(type) {
+		case StaticType:
+			return s.compareTypes(Type1.(StaticType).BaseType, Type2.(StaticType).BaseType)
+		}
+		return s.compareTypes(Type1, Type2.(StaticType).BaseType)
+	}
+
+	switch Type1.(type) {
+	case InternalType:
+		return true
+	case NumberType:
+		root := s.getRootType(Type2)
+
+		switch root.(type) {
+		case NumberType:
+			return true
+		case InternalType:
+			return true
+		case BasicType:
+			switch root.(BasicType).Expr.(type) {
+			case IdentExpr:
+				for _, buff := range GlobalTypes {
+					if bytes.Compare([]byte(buff), root.(BasicType).Expr.(IdentExpr).Value.Buff) == 0 {
+						return true
+					}
+				}
+			}
+		}
+		return false
+	case BasicType:
+		switch Type2.(type) {
+		case BasicType:
+			break
+		default:
+			return false
+		}
+		switch Type1.(BasicType).Expr.(type) {
+		case IdentExpr:
+			switch Type2.(BasicType).Expr.(type) {
+			case IdentExpr:
+				break
+			default:
+				return false
+			}
+			return bytes.Compare(Type1.(BasicType).Expr.(IdentExpr).Value.Buff, Type2.(BasicType).Expr.(IdentExpr).Value.Buff) == 0
+		case MemberExpr:
+			switch Type2.(BasicType).Expr.(type) {
+			case MemberExpr:
+				break
+			default:
+				return false
+			}
+			return true
+		}
+		return s.compareTypes(BasicType{Expr: Type2.(BasicType).Expr.(MemberExpr).Base}, BasicType{Expr: Type1.(BasicType).Expr.(MemberExpr).Base}) && bytes.Compare(Type2.(BasicType).Expr.(MemberExpr).Prop.Buff, Type1.(BasicType).Expr.(MemberExpr).Prop.Buff) == 0
+	case PointerType:
+		switch Type2.(type) {
+		case DynamicType:
+			return s.compareTypes(Type1.(PointerType).BaseType, Type2.(DynamicType).BaseType)
+		case PointerType:
+			return s.compareTypes(Type1.(PointerType).BaseType, Type2.(PointerType).BaseType)
+		default:
+			return false
+		}
+	case DynamicType:
+		switch Type2.(type) {
+		case DynamicType:
+			return s.compareTypes(Type1.(DynamicType).BaseType, Type2.(DynamicType).BaseType)
+		case PointerType:
+			return s.compareTypes(Type1.(DynamicType).BaseType, Type2.(PointerType).BaseType)
+		default:
+			return false
+		}
+	case ArrayType:
+		switch Type2.(type) {
+		case ArrayType:
+			break
+		default:
+			return false
+		}
+		return s.compareTypes(Type1.(ArrayType).BaseType, Type2.(ArrayType).BaseType)
+	case ConstType:
+		switch Type2.(type) {
+		case ConstType:
+			break
+		default:
+			return false
+		}
+		return s.compareTypes(Type1.(ConstType).BaseType, Type2.(ConstType).BaseType)
+	case FuncType:
+		switch Type2.(type) {
+		case FuncType:
+			break
+		default:
+			return false
+		}
+		type1 := Type1.(FuncType)
+		type2 := Type2.(FuncType)
+
+		if len(type1.ArgTypes) != len(type2.ArgTypes) {
+			return false
+		}
+		if type1.Type != type2.Type {
+			return false
+		}
+		for x, arg := range type1.ArgTypes {
+			if !s.compareTypes(arg, type2.ArgTypes[x]) {
+				return false
+			}
+		}
+		return s.compareTypes(type1.ReturnTypes[0], type2.ReturnTypes[0])
+	case CaptureType:
+		switch Type2.(type) {
+		case CaptureType:
+			return s.compareTypes(Type1.(CaptureType).BaseType, Type2.(CaptureType).BaseType)
+		}
+		return s.compareTypes(Type1.(CaptureType).BaseType, Type2)
+	case StaticType:
+		switch Type2.(type) {
+		case StaticType:
+			return s.compareTypes(Type1.(StaticType).BaseType, Type2.(StaticType).BaseType)
+		}
+		return s.compareTypes(Type1.(StaticType).BaseType, Type2)
+	case TupleType:
+		switch Type2.(type) {
+		case TupleType:
+			break
+		default:
+			return false
+		}
+		for x, typ := range Type1.(TupleType).Types {
+			if !s.compareTypes(typ, Type2.(TupleType).Types[x]) {
+				return false
+			}
+		}
+		return true
+	}
+
+	return false
+}
+
+func (s *SemanticAnalyzer) typeCast(typecast TypeCast) {
+	s.expr(typecast.Expr)
+	s.typ(typecast.Type)
+
+	type1 := s.getRootType(typecast.Type)
+	type2 := s.getRootType(s.getType(typecast.Expr))
+
+	switch type2.(type) {
+	case ConstType:
+		switch type1.(type) {
+		case ConstType:
+			break
+		default:
+			s.error("Cannot typecast a constant expression to a non constant expression.", typecast.LineM(), typecast.ColumnM())
+		}
+	}
+
+	switch type1.(type) {
+	case DynamicType:
+		switch type2.(type) {
+		case DynamicType:
+		case InternalType:
+			break
+		default:
+			s.error("Cannot typecast a non-dynamic type to a dynamic type.", typecast.LineM(), typecast.ColumnM())
+		}
+	case BasicType:
+	case PointerType:
+	case InternalType:
+	case FuncType:
+		break
+	default:
+		s.error("Typecasting to non scalar data types isn't allowed.", typecast.LineM(), typecast.ColumnM())
+	}
+}
+
+func (s *SemanticAnalyzer) getRootType(typ Type) Type {
+	Typ := typ
+
+	switch typ.(type) {
+	case BasicType:
+		Typ = s.getType(typ.(BasicType).Expr)
+	case Typedef:
+		break
+	default:
+		return typ
+	}
+
+	switch Typ.(type) {
+	case Typedef:
+		break
+	default:
+		return Typ
+	}
+	/*
+		Sym := s.getSymbol(Typ.(Typedef).Name, false)
+		if Sym == nil {
+			s.error("Unknown type {typ}.", typ.LineM(), typ.ColumnM())
+		}
+	*/
+	return s.getRootType(Typ.(Typedef).Type)
+}
+
+func (s *SemanticAnalyzer) lenExpr(lenExpr LenExpr) {
+	Typ := lenExpr.Type
+
+	switch Typ.(type) {
+	case BasicType:
+		Typ = s.getType(lenExpr.Type.(BasicType).Expr)
+	}
+
+	Typ = s.getRootType(Typ)
+
+	switch Typ.(type) {
+	case DynamicType:
+		switch Typ.(DynamicType).BaseType.(type) {
+		case ImplictArrayType:
+			return
+		case ArrayType:
+			return
+		}
+	case ArrayType:
+		return
+	case ImplictArrayType:
+		return
+	}
+	s.error("len keyword cant be used with non-array types", lenExpr.LineM(), lenExpr.ColumnM())
+}
+
+func (s *SemanticAnalyzer) sizeExpr(sizeExpr SizeExpr) {
+	switch sizeExpr.Type.(type) {
+	case BasicType:
+		s.expr(sizeExpr.Type.(BasicType).Expr)
+	default:
+		s.typ(sizeExpr.Type)
+	}
+}
+
+func (s *SemanticAnalyzer) appendBase(expr Expression, base Expression) Expression {
+	switch expr.(type) {
+	case IdentExpr:
+		return MemberExpr{Base: base, Prop: expr.(IdentExpr).Value}
+	case MemberExpr:
+		return MemberExpr{Base: s.appendBase(expr.(MemberExpr).Base.(MemberExpr), base), Prop: expr.(MemberExpr).Prop}
+	}
+	// s.error("Can't append to this expression.", expr.LineM(), expr.ColumnM())
+	return nil
+}
+
+func (s *SemanticAnalyzer) ofNamespace(typ Type, name Expression, t *SymbolTable) Type {
+	switch typ.(type) {
+	case BasicType:
+		switch typ.(BasicType).Expr.(type) {
+		case IdentExpr:
+			if typ.(BasicType).Expr.(IdentExpr).Value.Buff[0] == '$' {
+				return typ
+			}
+			for _, buff := range Globals {
+				if bytes.Compare([]byte(buff), typ.(BasicType).Expr.(IdentExpr).Value.Buff) == 0 {
+					return typ
+				}
+			}
+			return BasicType{Expr: s.appendBase(typ.(BasicType).Expr, name), Line: typ.LineM(), Column: typ.ColumnM()}
+		}
+	case PointerType:
+		return PointerType{BaseType: s.ofNamespace(typ.(PointerType).BaseType, name, t), Line: typ.LineM(), Column: typ.ColumnM()}
+	case DynamicType:
+		return DynamicType{BaseType: s.ofNamespace(typ.(DynamicType).BaseType, name, t), Line: typ.LineM(), Column: typ.ColumnM()}
+	case ArrayType:
+		return ArrayType{BaseType: s.ofNamespace(typ.(ArrayType).BaseType, name, t), Size: typ.(ArrayType).Size, Line: typ.LineM(), Column: typ.ColumnM()}
+	case ImplictArrayType:
+		return ImplictArrayType{BaseType: s.ofNamespace(typ.(ImplictArrayType).BaseType, name, t), Line: typ.LineM(), Column: typ.ColumnM()}
+	case ConstType:
+		return ConstType{BaseType: s.ofNamespace(typ.(ConstType).BaseType, name, t), Line: typ.LineM(), Column: typ.ColumnM()}
+	case FuncType:
+		fnc := typ.(FuncType)
+		return FuncType{Type: fnc.Type, ArgNames: fnc.ArgNames, ArgTypes: s.ofNamespaceArray(fnc.ArgTypes, name, t), ReturnTypes: s.ofNamespaceArray(fnc.ReturnTypes, name, t), Line: typ.LineM(), Column: typ.ColumnM()}
+	case TupleType:
+		return TupleType{Types: s.ofNamespaceArray(typ.(TupleType).Types, name, t), Line: typ.LineM(), Column: typ.ColumnM()}
+	case StructType:
+		// needs work
+	case Typedef:
+		for _, buff := range Globals {
+			if bytes.Compare([]byte(buff), typ.(Typedef).Name.Buff) == 0 {
+				return typ
+			}
+		}
+		return Typedef{Name: typ.(Typedef).Name, DefaultName: typ.(Typedef).DefaultName, Type: s.ofNamespace(typ.(Typedef).Type, name, t), NameSpace: name.(IdentExpr).Value}
+	case UnionType:
+		return UnionType{Identifiers: typ.(UnionType).Identifiers, Types: s.ofNamespaceArray(typ.(UnionType).Types, name, t), Line: typ.LineM(), Column: typ.ColumnM()}
+	}
+	return typ
+}
+
+func (s *SemanticAnalyzer) ofNamespaceArray(types []Type, name Expression, t *SymbolTable) []Type {
+	newTypes := make([]Type, len(types))
+	for i, typ := range types {
+		newTypes[i] = s.ofNamespace(typ, name, t)
+	}
+	return newTypes
 }

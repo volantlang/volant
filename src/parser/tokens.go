@@ -68,11 +68,12 @@ const (
 	SizeKeyword     PrimaryTokenType = 126
 	ExportKeyword   PrimaryTokenType = 127
 	UnionKeyword    PrimaryTokenType = 128
+	StaticKeyword   PrimaryTokenType = 129
+	CaptureKeyword  PrimaryTokenType = 130
 
 	// the parser stops parsing when it receives either of these types and shows the correct error message
 	EOF        PrimaryTokenType = 254
 	ErrorToken PrimaryTokenType = 255
-	// ...more stuff
 )
 
 // Secondary token type
@@ -170,6 +171,8 @@ var Keywords = map[string]PrimaryTokenType{
 	"size":     SizeKeyword,
 	"export":   ExportKeyword,
 	"union":    UnionKeyword,
+	"static":   StaticKeyword,
+	"capture":  CaptureKeyword,
 	// more stuff
 }
 

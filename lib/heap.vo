@@ -1,0 +1,19 @@
+import "mem.vo";
+
+export func work malloc(s: ssize_t) *void {
+    return cast(*void)$malloc(s);
+}
+
+export func work free(ptr: *void) {
+    $free(ptr);
+}
+
+export func work realloc(ptr: *void, s: ssize_t) *void {
+    _new := mem.copy(malloc(s), ptr, s);
+    free(ptr);
+    return _new;
+}
+
+export func work calloc(el_size: ssize_t, el_num: ssize_t) *void {
+    return malloc(el_size*el_num);
+}

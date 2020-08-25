@@ -8,10 +8,10 @@ import (
 type langError string
 
 func New(message string, line int, column int) {
-	errorstring := "Error: line %d column %d: " + message
-	log.Fatal(fmt.Sprintf(errorstring, line, column))
+	log.Fatal(fmt.Sprintf("Error: line %d column %d: %s\n", line, column, message))
 }
+
 // for general (non-code) errors
-func NewGenError(message string){
+func NewGenError(message string) {
 	log.Fatal(message)
 }

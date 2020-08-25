@@ -6,75 +6,52 @@ import (
 )
 
 type SymbolTable struct {
-	First *Node
+	Nodes    []Node
+	Parent   *SymbolTable
+	Flag     int
+	Children []*SymbolTable
 }
 
 type Node struct {
 	Identifier Token
-	Scope      int
 	Type       Type
-	Next       *Node
 }
 
-func (t *SymbolTable) Add(node *Node) {
-	node.Next = t.First.Next
-	t.First.Next = node
+func (t *SymbolTable) Add(node Node) {
+	t.Nodes = append(t.Nodes, node)
 }
 
-func (t *SymbolTable) Find(Ident Token, Scope int) *Node {
-	node := t.First.Next
-
-	if node == nil {
-		return nil
-	}
-
-	for bytes.Compare(node.Identifier.Buff, Ident.Buff) != 0 || node.Scope != Scope {
-		node = node.Next
-		if node == nil {
-			return nil
+func (t *SymbolTable) Find(Ident Token) (Node, bool) {
+	for _, node := range t.Nodes {
+		// print(string(Ident.Buff), "\t", string(node.Identifier.Buff), "\n")
+		if bytes.Compare(node.Identifier.Buff, Ident.Buff) == 0 {
+			return node, true
 		}
 	}
-
-	return node
+	return Node{}, false
 }
 
-func (t *SymbolTable) Update(Ident Token, scope int, Typ Type) bool {
-	node := t.Find(Ident, scope)
-	if node != nil {
-		node.Type = Typ
-		return true
+func (t *SymbolTable) NewChild() *SymbolTable {
+	s := SymbolTable{Parent: t}
+	t.Children = append(t.Children, &s)
+	return &s
+}
+
+func (t *SymbolTable) FindInAll(Ident Token) (Node, bool) {
+	// print("\n")
+	node, ok := t.Find(Ident)
+	if ok {
+		return node, true
 	}
-	return false
-}
+	parent := t.Parent
 
-func (t *SymbolTable) Delete(Ident Token, Scope int) {
-	last := t.First
-	node := last.Next
-
-	for node != nil {
-		if bytes.Compare(node.Identifier.Buff, Ident.Buff) == 0 && node.Scope == Scope {
-			last.Next = node.Next
-			return
+	for parent != nil {
+		node, ok := parent.Find(Ident)
+		if ok {
+			return node, true
 		}
-		last = node
-		node = node.Next
+		parent = parent.Parent
 	}
-}
-
-func (t *SymbolTable) DeleteAll(Scope int) {
-	last := t.First
-	node := last.Next
-
-	for node != nil {
-		if node.Scope == Scope {
-			last.Next = node.Next
-		} else {
-			last = node
-		}
-		node = node.Next
-	}
-}
-
-func (node *Node) Print() {
-	print(node.Identifier.Serialize())
+	// print("\n")
+	return Node{}, false
 }

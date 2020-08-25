@@ -29,21 +29,36 @@ const (
 type CaseStruct struct {
 	Condition Expression
 	Block     Block
+	Line      int
+	Column    int
+}
+
+func (c CaseStruct) LineM() int {
+	return c.Line
+}
+func (c CaseStruct) ColumnM() int {
+	return c.Column
 }
 
 type Statement interface {
 	isStatement()
+	LineM() int
+	ColumnM() int
 }
 
 type Expression interface {
 	isExpression()
 	isStatement()
+	LineM() int
+	ColumnM() int
 }
 
 type Type interface {
 	isType()
 	isExpression()
 	isStatement()
+	LineM() int
+	ColumnM() int
 }
 
 type File struct {
@@ -123,9 +138,11 @@ type (
 		Name        Token
 		DefaultName Token
 		Type        Type
+		NameSpace   Token
 		Line        int
 		Column      int
 	}
+
 	Break struct {
 		Line   int
 		Column int
@@ -134,10 +151,13 @@ type (
 		Line   int
 		Column int
 	}
-	ExportStatement struct {
-		Stmt Statement
-	}
 	NullStatement struct {
+		Line   int
+		Column int
+	}
+
+	ExportStatement struct {
+		Stmt   Statement
 		Line   int
 		Column int
 	}
@@ -145,91 +165,126 @@ type (
 
 type (
 	BasicLit struct {
-		Value Token
+		Value  Token
+		Line   int
+		Column int
 	}
 
 	BinaryExpr struct {
-		Left  Expression
-		Op    Token
-		Right Expression
+		Left   Expression
+		Op     Token
+		Right  Expression
+		Line   int
+		Column int
 	}
 
 	UnaryExpr struct {
-		Op   Token
-		Expr Expression
+		Op     Token
+		Expr   Expression
+		Line   int
+		Column int
 	}
 
 	PostfixUnaryExpr struct {
-		Op   Token
-		Expr Expression
+		Op     Token
+		Expr   Expression
+		Line   int
+		Column int
 	}
 
 	TernaryExpr struct {
-		Cond  Expression
-		Left  Expression
-		Right Expression
+		Cond   Expression
+		Left   Expression
+		Right  Expression
+		Line   int
+		Column int
 	}
 
 	FuncExpr struct {
-		Type  FuncType
-		Block Block
+		Type   FuncType
+		Block  Block
+		Line   int
+		Column int
 	}
 
 	CallExpr struct {
 		Function Expression
 		Args     []Expression
+		Line     int
+		Column   int
 	}
 
 	TypeCast struct {
-		Type Type
-		Expr Expression
+		Type   Type
+		Expr   Expression
+		Line   int
+		Column int
 	}
 
 	IdentExpr struct {
-		Value Token
+		Value  Token
+		Line   int
+		Column int
 	}
 
 	MemberExpr struct {
-		Base Expression
-		Expr Expression
+		Base   Expression
+		Prop   Token
+		Line   int
+		Column int
 	}
 
 	PointerMemberExpr struct {
-		Base Expression
-		Expr Expression
+		Base   Expression
+		Prop   Token
+		Line   int
+		Column int
 	}
 
 	ArrayMemberExpr struct {
 		Parent Expression
 		Index  Expression
+		Line   int
+		Column int
 	}
 
 	CompoundLiteral struct {
-		Name Expression
-		Data CompoundLiteralData
+		Name   Type
+		Data   CompoundLiteralData
+		Line   int
+		Column int
 	}
 
 	CompoundLiteralData struct {
 		Fields []Token
 		Values []Expression
+		Line   int
+		Column int
 	}
 
 	ArrayLiteral struct {
-		Exprs []Expression
+		Exprs  []Expression
+		Line   int
+		Column int
 	}
 
 	HeapAlloc struct {
-		Type Type
+		Type   Type
+		Val    Expression
+		Line   int
+		Column int
 	}
 
 	LenExpr struct {
-		Expr Expression
-		Type Type
+		Type   Type
+		Line   int
+		Column int
 	}
 
 	SizeExpr struct {
-		Expr Expression
-		Type Type
+		Type   Type
+		Line   int
+		Column int
 	}
 )
 
@@ -239,52 +294,90 @@ type (
 		ArgTypes    []Type
 		ArgNames    []Token
 		ReturnTypes []Type
+		Mut         bool
+		Line        int
+		Column      int
 	}
 
 	StructType struct {
 		Name         Token
 		Props        []Declaration
 		SuperStructs []Expression
+		Line         int
+		Column       int
 	}
 
 	TupleType struct {
-		Types []Type
+		Types  []Type
+		Line   int
+		Column int
 	}
 
 	EnumType struct {
 		Identifiers []Token
 		Values      []Expression
+		Line        int
+		Column      int
 	}
 
 	UnionType struct {
 		Identifiers []Token
 		Types       []Type
+		Line        int
+		Column      int
 	}
 
 	BasicType struct {
-		Expr Expression
+		Expr   Expression
+		Line   int
+		Column int
 	}
 
 	PointerType struct {
 		BaseType Type
+		Line     int
+		Column   int
 	}
 
 	DynamicType struct {
 		BaseType Type
+		Line     int
+		Column   int
 	}
 
 	ConstType struct {
 		BaseType Type
+		Line     int
+		Column   int
+	}
+
+	CaptureType struct {
+		BaseType Type
+		Line     int
+		Column   int
 	}
 
 	ImplictArrayType struct {
 		BaseType Type
+		Line     int
+		Column   int
 	}
 
 	ArrayType struct {
 		Size     Token
 		BaseType Type
+		Line     int
+		Column   int
 	}
+
+	StaticType struct {
+		BaseType Type
+		Line     int
+		Column   int
+	}
+
+	InternalType struct{}
+	NumberType   struct{}
 )
 
 func (Block) isStatement()           {}
@@ -352,6 +445,10 @@ func (ArrayType) isType()        {}
 func (DynamicType) isType()      {}
 func (ImplictArrayType) isType() {}
 func (Typedef) isType()          {}
+func (InternalType) isType()     {}
+func (NumberType) isType()       {}
+func (CaptureType) isType()      {}
+func (StaticType) isType()       {}
 
 func (BasicType) isExpression()        {}
 func (StructType) isExpression()       {}
@@ -365,6 +462,10 @@ func (ArrayType) isExpression()        {}
 func (DynamicType) isExpression()      {}
 func (ImplictArrayType) isExpression() {}
 func (Typedef) isExpression()          {}
+func (InternalType) isExpression()     {}
+func (NumberType) isExpression()       {}
+func (CaptureType) isExpression()      {}
+func (StaticType) isExpression()       {}
 
 func (BasicType) isStatement()        {}
 func (StructType) isStatement()       {}
@@ -378,13 +479,348 @@ func (ArrayType) isStatement()        {}
 func (DynamicType) isStatement()      {}
 func (ImplictArrayType) isStatement() {}
 func (Typedef) isStatement()          {}
+func (InternalType) isStatement()     {}
+func (NumberType) isStatement()       {}
+func (CaptureType) isStatement()      {}
+func (StaticType) isStatement()       {}
 
-var VoidType = BasicType{
-	Expr: IdentExpr{
-		Value: Token{
-			Buff:          []byte("void"),
-			PrimaryType:   Identifier,
-			SecondaryType: SecondaryNullType,
-		},
-	},
+func (s Block) LineM() int {
+	return s.Line
 }
+func (s Declaration) LineM() int {
+	return s.Line
+}
+func (s Import) LineM() int {
+	return s.Line
+}
+func (s Loop) LineM() int {
+	return s.Line
+}
+func (s Switch) LineM() int {
+	return s.Line
+}
+func (s IfElseBlock) LineM() int {
+	return s.Line
+}
+func (s Return) LineM() int {
+	return s.Line
+}
+func (s Assignment) LineM() int {
+	return s.Line
+}
+func (s NullStatement) LineM() int {
+	return s.Line
+}
+func (s Break) LineM() int {
+	return s.Line
+}
+func (s Continue) LineM() int {
+	return s.Line
+}
+func (s Defer) LineM() int {
+	return s.Line
+}
+func (s Delete) LineM() int {
+	return s.Line
+}
+func (s ExportStatement) LineM() int {
+	return s.Line
+}
+
+func (s Block) ColumnM() int {
+	return s.Column
+}
+func (s Declaration) ColumnM() int {
+	return s.Column
+}
+func (s Import) ColumnM() int {
+	return s.Column
+}
+func (s Loop) ColumnM() int {
+	return s.Column
+}
+func (s Switch) ColumnM() int {
+	return s.Column
+}
+func (s IfElseBlock) ColumnM() int {
+	return s.Column
+}
+func (s Return) ColumnM() int {
+	return s.Column
+}
+func (s Assignment) ColumnM() int {
+	return s.Column
+}
+func (s NullStatement) ColumnM() int {
+	return s.Column
+}
+func (s Break) ColumnM() int {
+	return s.Column
+}
+func (s Continue) ColumnM() int {
+	return s.Column
+}
+func (s Defer) ColumnM() int {
+	return s.Column
+}
+func (s Delete) ColumnM() int {
+	return s.Column
+}
+func (s ExportStatement) ColumnM() int {
+	return s.Column
+}
+
+func (e BasicLit) LineM() int {
+	return e.Line
+}
+func (e BinaryExpr) LineM() int {
+	return e.Line
+}
+func (e UnaryExpr) LineM() int {
+	return e.Line
+}
+func (e CallExpr) LineM() int {
+	return e.Line
+}
+func (e FuncExpr) LineM() int {
+	return e.Line
+}
+func (e TernaryExpr) LineM() int {
+	return e.Line
+}
+func (e PostfixUnaryExpr) LineM() int {
+	return e.Line
+}
+func (e TypeCast) LineM() int {
+	return e.Line
+}
+func (e IdentExpr) LineM() int {
+	return e.Line
+}
+func (e MemberExpr) LineM() int {
+	return e.Line
+}
+func (e ArrayMemberExpr) LineM() int {
+	return e.Line
+}
+func (e CompoundLiteral) LineM() int {
+	return e.Line
+}
+func (e CompoundLiteralData) LineM() int {
+	return e.Line
+}
+func (e HeapAlloc) LineM() int {
+	return e.Line
+}
+func (e ArrayLiteral) LineM() int {
+	return e.Line
+}
+func (e LenExpr) LineM() int {
+	return e.Line
+}
+func (e SizeExpr) LineM() int {
+	return e.Line
+}
+func (e PointerMemberExpr) LineM() int {
+	return e.Line
+}
+func (e BasicLit) ColumnM() int {
+	return e.Column
+}
+func (e BinaryExpr) ColumnM() int {
+	return e.Column
+}
+func (e UnaryExpr) ColumnM() int {
+	return e.Column
+}
+func (e CallExpr) ColumnM() int {
+	return e.Column
+}
+func (e FuncExpr) ColumnM() int {
+	return e.Column
+}
+func (e TernaryExpr) ColumnM() int {
+	return e.Column
+}
+func (e PostfixUnaryExpr) ColumnM() int {
+	return e.Column
+}
+func (e TypeCast) ColumnM() int {
+	return e.Column
+}
+func (e IdentExpr) ColumnM() int {
+	return e.Column
+}
+func (e MemberExpr) ColumnM() int {
+	return e.Column
+}
+func (e ArrayMemberExpr) ColumnM() int {
+	return e.Column
+}
+func (e CompoundLiteral) ColumnM() int {
+	return e.Column
+}
+func (e CompoundLiteralData) ColumnM() int {
+	return e.Column
+}
+func (e HeapAlloc) ColumnM() int {
+	return e.Column
+}
+func (e ArrayLiteral) ColumnM() int {
+	return e.Column
+}
+func (e LenExpr) ColumnM() int {
+	return e.Column
+}
+func (e SizeExpr) ColumnM() int {
+	return e.Column
+}
+func (e PointerMemberExpr) ColumnM() int {
+	return e.Column
+}
+
+func (t BasicType) LineM() int {
+	return t.Line
+}
+func (t StructType) LineM() int {
+	return t.Line
+}
+func (t EnumType) LineM() int {
+	return t.Line
+}
+func (t TupleType) LineM() int {
+	return t.Line
+}
+func (t UnionType) LineM() int {
+	return t.Line
+}
+func (t FuncType) LineM() int {
+	return t.Line
+}
+func (t ConstType) LineM() int {
+	return t.Line
+}
+func (t PointerType) LineM() int {
+	return t.Line
+}
+func (t ArrayType) LineM() int {
+	return t.Line
+}
+func (t DynamicType) LineM() int {
+	return t.Line
+}
+func (t ImplictArrayType) LineM() int {
+	return t.Line
+}
+func (t Typedef) LineM() int {
+	return t.Line
+}
+func (t InternalType) LineM() int {
+	return -1
+}
+func (t NumberType) LineM() int {
+	return -1
+}
+func (t CaptureType) LineM() int {
+	return t.Line
+}
+func (t StaticType) LineM() int {
+	return t.Line
+}
+
+func (t BasicType) ColumnM() int {
+	return t.Column
+}
+func (t StructType) ColumnM() int {
+	return t.Column
+}
+func (t EnumType) ColumnM() int {
+	return t.Column
+}
+func (t TupleType) ColumnM() int {
+	return t.Column
+}
+func (t UnionType) ColumnM() int {
+	return t.Column
+}
+func (t FuncType) ColumnM() int {
+	return t.Column
+}
+func (t ConstType) ColumnM() int {
+	return t.Column
+}
+func (t PointerType) ColumnM() int {
+	return t.Column
+}
+func (t ArrayType) ColumnM() int {
+	return t.Column
+}
+func (t DynamicType) ColumnM() int {
+	return t.Column
+}
+func (t ImplictArrayType) ColumnM() int {
+	return t.Column
+}
+func (t Typedef) ColumnM() int {
+	return t.Column
+}
+func (t InternalType) ColumnM() int {
+	return -1
+}
+func (t NumberType) ColumnM() int {
+	return -1
+}
+func (t CaptureType) ColumnM() int {
+	return t.Column
+}
+func (t StaticType) ColumnM() int {
+	return t.Column
+}
+
+var VoidToken = Token{Buff: []byte("void"), PrimaryType: Identifier}
+var VoidType = Typedef{Name: VoidToken, Type: BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("$void"), PrimaryType: Identifier}}}}
+
+var BoolToken = Token{Buff: []byte("bool"), PrimaryType: Identifier}
+var BoolType = Typedef{Name: BoolToken, Type: BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("$bool"), PrimaryType: Identifier}}}}
+
+var U8Token = Token{Buff: []byte("u8"), PrimaryType: Identifier}
+var U8Type = Typedef{Name: U8Token, Type: BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("$u8"), PrimaryType: Identifier}}}}
+
+var U16Token = Token{Buff: []byte("u16"), PrimaryType: Identifier}
+var U16Type = Typedef{Name: U16Token, Type: BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("$u16"), PrimaryType: Identifier}}}}
+
+var U32Token = Token{Buff: []byte("u32"), PrimaryType: Identifier}
+var U32Type = Typedef{Name: U32Token, Type: BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("$u32"), PrimaryType: Identifier}}}}
+
+var U64Token = Token{Buff: []byte("u64"), PrimaryType: Identifier}
+var U64Type = Typedef{Name: U64Token, Type: BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("$u64"), PrimaryType: Identifier}}}}
+
+var I8Token = Token{Buff: []byte("i8"), PrimaryType: Identifier}
+var I8Type = Typedef{Name: I8Token, Type: BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("$i8"), PrimaryType: Identifier}}}}
+
+var I16Token = Token{Buff: []byte("i16"), PrimaryType: Identifier}
+var I16Type = Typedef{Name: I16Token, Type: BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("$i16"), PrimaryType: Identifier}}}}
+
+var I32Token = Token{Buff: []byte("i32"), PrimaryType: Identifier}
+var I32Type = Typedef{Name: I32Token, Type: BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("$i32"), PrimaryType: Identifier}}}}
+
+var I64Token = Token{Buff: []byte("i64"), PrimaryType: Identifier}
+var I64Type = Typedef{Name: I64Token, Type: BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("$i64"), PrimaryType: Identifier}}}}
+
+var F32Token = Token{Buff: []byte("f32"), PrimaryType: Identifier}
+var F32Type = Typedef{Name: F32Token, Type: BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("$f32"), PrimaryType: Identifier}}}}
+
+var F64Token = Token{Buff: []byte("i64"), PrimaryType: Identifier}
+var F64Type = Typedef{Name: F64Token, Type: BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("$f64"), PrimaryType: Identifier}}}}
+
+var True = IdentExpr{Value: Token{Buff: []byte("true"), PrimaryType: Identifier}}
+var False = IdentExpr{Value: Token{Buff: []byte("false"), PrimaryType: Identifier}}
+
+var SSizeTToken = Token{Buff: []byte("ssize_t"), PrimaryType: Identifier}
+var SSizeTType = Typedef{Name: I64Token, Type: BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("$ssize_t"), PrimaryType: Identifier}}}}
+
+var UptrToken = Token{Buff: []byte("uptr"), PrimaryType: Identifier}
+var UptrType = Typedef{Name: I64Token, Type: BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("$unitptr"), PrimaryType: Identifier}}}}
+
+var Globals = []string{"u8", "u16", "u32", "u64", "i8", "i16", "i32", "i64", "uptr", "f32", "f64", "void", "bool", "ssize_t", "true", "false"}
+var GlobalTypes = []string{"u8", "u16", "u32", "u64", "i8", "i16", "i32", "i64", "uptr", "f32", "f64", "void", "bool", "ssize_t"}

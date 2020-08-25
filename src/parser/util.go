@@ -27,12 +27,12 @@ func IsNumHex(b byte) bool {
 
 //IsIdentifierPart checks if `b` is a valid character for being a part of identifier `(a-z|A-Z|0-9|_)`
 func IsIdentifierPart(b byte) bool {
-	return IsChar(b) || IsNumDec(b) || b == '_'
+	return IsChar(b) || IsNumDec(b) || b == '_' || b == '$'
 }
 
 //IsIdentifierBegining checks if `b` is valid for being the first character of an identifier `(a-z|A-Z|_)`
 func IsIdentifierBegining(b byte) bool {
-	return IsChar(b) || b == '_'
+	return IsChar(b) || b == '_' || b == '$'
 }
 
 //IsStringDelimiter checks if `b` is a string delimiter `"`
@@ -43,6 +43,11 @@ func IsStringDelimiter(b byte) bool {
 //IsCharDelimiter checks if `b` is a char delimiter `'`
 func IsCharDelimiter(b byte) bool {
 	return b == '\''
+}
+
+//IsSpace checks if `b` is a blank space (' '|'\n'|'\t|'\r')
+func IsSpace(b byte) bool {
+	return b == ' ' || b == '\n' || b == '\r' || b == '\t'
 }
 
 //GetWordType retuns the right PrimaryTokenType for identifiers or keywords

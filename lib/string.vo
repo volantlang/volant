@@ -1,0 +1,23 @@
+/*
+struct String {
+    length: size_t;
+    buf: []u8;
+};
+
+from := func work (buf: *u8){
+    l := _len(buf);
+    
+    str := 
+};
+
+
+_len := func work (buf: *u8) ssize_t {
+    i: ssize_t = 0;
+    c := buf[0];
+
+    for ;c != 0; ++i {
+        c = buf[i];
+    } 
+    return i;
+};
+*/

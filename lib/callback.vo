@@ -1,0 +1,7 @@
+export func work copy(fnc: *void) *void {
+    return cast(*void)$Block_copy(fnc);
+};
+
+export func work release(fnc: *void) {
+    $Block_release(fnc);
+};

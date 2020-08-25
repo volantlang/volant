@@ -1,2 +1,2 @@
 language = "bash"
-run = "export GOPATH=$HOME/volant && go run ./src > test.c && (clang test.c -pthread -fblocks -lBlocksRuntime -lgc -isystem/home/runner/.apt/usr/include/ || install-pkg libgc-dev libblocksruntimee-dev && clang test.c -pthread -fblocks -lBlocksRuntime -lgc -isystem/home/runner/.apt/usr/include/) && ./a.out"
+run = "export GOPATH=$HOME/volant && go build -o ./bin/volant ./src"

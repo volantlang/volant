@@ -4,7 +4,7 @@ import (
 	. "compiler"
 	"flag"
 	"fmt"
-	. "importer"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -12,6 +12,7 @@ import (
 
 var exPath, _ = os.Executable()
 var libPath = path.Join(path.Dir(exPath), "../lib")
+var defaultC, _ = ioutil.ReadFile(path.Join(libPath, "internal/default.h"))
 
 func main() {
 	fileName := flag.String("compile", "", "file to be compiled")
@@ -23,8 +24,12 @@ func main() {
 		fmt.Println("file name not given")
 		os.Exit(1)
 	}
-	ImportFile(path.Dir(file), path.Base(file), true, CompileFile, AnalyzeFile)
-	out, err := exec.Command("clang", path.Join(path.Dir(file), "_build", path.Base(file)+".c"), "-pthread", "-luv", "-fblocks", "-lBlocksRuntime", "-lgc").CombinedOutput()
+
+	fd, _ := os.Create(path.Join(path.Dir(file), "_build/default.h"))
+	fd.Write(defaultC)
+
+	ImportFile(path.Dir(file), path.Base(file), true, 0)
+	out, err := exec.Command("clang", path.Join(path.Dir(file), "_build", "0"+path.Base(file)+".c"), "-pthread", "-luv", "-fblocks", "-lBlocksRuntime", "-lgc", "-o", path.Join(path.Dir(file), "a.out")).CombinedOutput()
 
 	if err != nil {
 		fmt.Println(string(out))
