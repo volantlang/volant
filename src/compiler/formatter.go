@@ -156,6 +156,7 @@ func (f *Formatter) enum(enum EnumType, Name Token) EnumType {
 func (f *Formatter) typedef(typedef Typedef) Typedef {
 	Typ := typedef.Type
 	DefaultName := Token{}
+
 	switch Typ.(type) {
 	case StructType:
 		Typ = f.strct(Typ.(StructType), typedef.Name)
@@ -267,6 +268,10 @@ func (f *Formatter) superStrctProp(superSt BasicType, prop Declaration, Name Tok
 			newProp.Values = append(newProp.Values, f.expr(val))
 			continue
 		}
+		if val.(FuncExpr).Type.Mut {
+			newProp.Values = append(newProp.Values, f.expr(val))
+			continue
+		}
 
 		fnc := val.(FuncExpr)
 		argTypes := fnc.Type.ArgTypes
@@ -280,7 +285,7 @@ func (f *Formatter) superStrctProp(superSt BasicType, prop Declaration, Name Tok
 				newProp.Values = append(newProp.Values, f.expr(newVal))
 				continue
 			}
-		case FuncType:
+		case BasicType:
 			if f.compareTypes(first, superSt) {
 				newVal := FuncExpr{Type: FuncType{ReturnTypes: fnc.Type.ReturnTypes, ArgNames: fnc.Type.ArgNames, ArgTypes: append([]Type{BasicType{Expr: IdentExpr{Value: Name}}}, argTypes[1:]...)}, Block: fnc.Block}
 				newProp.Values = append(newProp.Values, f.expr(newVal))
@@ -299,12 +304,6 @@ func (f *Formatter) superStrctProp(superSt BasicType, prop Declaration, Name Tok
 				Typ = f.getType(newProp.Values[0])
 			}
 		}
-		/*
-			switch Typ.(type) {
-			case FuncType:
-				Typ = f.typ(newProp.Values[0].(FuncExpr).Type)
-			}
-		*/
 
 		for range prop.Identifiers {
 			newProp.Types = append(newProp.Types, Typ)
@@ -327,11 +326,14 @@ func (f *Formatter) superStrctProp(superSt BasicType, prop Declaration, Name Tok
 	for i, Ident := range prop.Identifiers {
 		switch newProp.Types[i].(type) {
 		case FuncType:
-			newProp.Identifiers = append(newProp.Identifiers, f.NameSp.getStrctMethodName(Ident, Name))
-		default:
-			newProp.Identifiers = append(newProp.Identifiers, f.NameSp.getPropName(Ident))
+			if !newProp.Types[i].(FuncType).Mut {
+				newProp.Identifiers = append(newProp.Identifiers, f.NameSp.getStrctMethodName(Ident, Name))
+				continue
+			}
 		}
+		newProp.Identifiers = append(newProp.Identifiers, f.NameSp.getPropName(Ident))
 	}
+
 	return newProp
 }
 
@@ -748,6 +750,7 @@ func (f *Formatter) memberExpr(expr MemberExpr) Expression {
 				p2 = Typ.(BasicType).Expr.(MemberExpr).Base
 			}
 		}
+		Typ = f.getType(Typ.(BasicType).Expr)
 	case Typedef:
 		if Typ.(Typedef).NameSpace.Buff != nil {
 			isImported = true
@@ -768,12 +771,12 @@ func (f *Formatter) memberExpr(expr MemberExpr) Expression {
 		}
 	}
 
-	Typ = f.getRootType(Typ)
+	Typ99 := f.getRootType(Typ)
 	var Typ2 StructType
 
-	switch Typ.(type) {
+	switch Typ99.(type) {
 	case StructType:
-		Typ2 = Typ.(StructType)
+		Typ2 = Typ99.(StructType)
 	case VecType:
 		return f.getVecProp(expr)
 	case PromiseType:
@@ -952,13 +955,7 @@ func (f *Formatter) getType(expr Expression) Type {
 	case FuncExpr:
 		return expr.(FuncExpr).Type
 	case HeapAlloc:
-		f.typ(expr.(HeapAlloc).Type)
-		switch expr.(HeapAlloc).Type.(type) {
-		case ArrayType:
-			return PointerType{BaseType: expr.(HeapAlloc).Type.(ArrayType).BaseType}
-		default:
-			return expr.(HeapAlloc).Type
-		}
+		return PointerType{BaseType: expr.(HeapAlloc).Type}
 	case CompoundLiteral:
 		return expr.(CompoundLiteral).Name
 	case MemberExpr:
@@ -1348,10 +1345,15 @@ func (f *Formatter) ofNamespace(typ Type, name Expression, t *SymbolTable) Type 
 		return TupleType{Types: f.ofNamespaceArray(typ.(TupleType).Types, name, t), Line: typ.LineM(), Column: typ.ColumnM()}
 	case StructType:
 		newProps := make([]Declaration, len(typ.(StructType).Props))
-		for x, prop := range typ.(StructType).Props {
-			newProps[x] = f.declaration(prop)
+		newSuperStructs := make([]Expression, len(typ.(StructType).SuperStructs))
+
+		for i, prop := range typ.(StructType).Props {
+			newProps[i] = Declaration{Types: f.ofNamespaceArray(prop.Types, name, t), Identifiers: prop.Identifiers, Values: prop.Values}
 		}
-		return StructType{Props: newProps, Name: typ.(StructType).Name, SuperStructs: f.exprArray(typ.(StructType).SuperStructs)}
+		for i, superStruct := range typ.(StructType).SuperStructs {
+			newSuperStructs[i] = f.ofNamespace(BasicType{Expr: superStruct}, name, t).(BasicType).Expr
+		}
+		return StructType{Props: newProps, SuperStructs: newSuperStructs, Name: typ.(StructType).Name}
 	case Typedef:
 		for _, buff := range Globals {
 			if bytes.Compare([]byte(buff), typ.(Typedef).Name.Buff) == 0 {

@@ -46,7 +46,7 @@ func isGlobal(buf []byte) bool {
 }
 
 func getLastImportPrefix() string {
-	return "v" + strconv.Itoa(num) + "_"
+	return "v" + strconv.Itoa(num-1) + "_"
 }
 
 func getPropName(prop Token) Token {

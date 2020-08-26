@@ -21,28 +21,36 @@ int main() {
 	return v0_main();
 }`)
 
+var ProjectDir string
+
 func ImportFile(dir string, base string, isMain bool, num2 int) *SymbolTable {
 	n := strconv.Itoa(num)
 	n2 := strconv.Itoa(num2)
 
+	if isMain {
+		ProjectDir = dir
+	}
+
 	path := Path.Join(dir, base)
-	OutPath := Path.Join(dir, "_build", n2+base)
+	OutPath := Path.Join(ProjectDir, "_build", dir, Path.Dir(base), n2+Path.Base(base))
 
 	if isMain {
 		OutPath += ".c"
-	} else {
+	} else if Path.Ext(OutPath) != ".h" {
 		OutPath += ".h"
 	}
 
 	Code, err := ioutil.ReadFile(path)
 
-	if err != nil && !isMain {
-		Code, err = ioutil.ReadFile(Path.Join(libPath, base))
+	if err != nil {
+		path = Path.Join(libPath, base)
+		Code, err = ioutil.ReadFile(path)
 	}
-	if err != nil && Path.Ext(OutPath) != ".h" {
+	if err != nil {
 		error.NewGenError("error finding import: " + err.Error())
 	}
 
+	os.MkdirAll(Path.Dir(OutPath), os.ModeDir)
 	f, err := os.Create(OutPath)
 
 	if err != nil {
@@ -53,8 +61,8 @@ func ImportFile(dir string, base string, isMain bool, num2 int) *SymbolTable {
 		f.Write(Code)
 	} else {
 		ast := ParseFile(&Lexer{Buffer: Code, Line: 1, Column: 1})
-		symbols, imports, prefixes, exports, num := AnalyzeFile(ast, path)
-		newAst := FormatFile(ast, symbols, imports, prefixes, num)
+		symbols, imports, prefixes, exports, numm := AnalyzeFile(ast, path)
+		newAst := FormatFile(ast, symbols, imports, prefixes, numm)
 
 		if !isMain {
 			f.Write([]byte("#ifndef H_" + n + "\n#define H_" + n + "\n"))
@@ -62,7 +70,6 @@ func ImportFile(dir string, base string, isMain bool, num2 int) *SymbolTable {
 		f.Write([]byte("#include \"internal/default.h\"\n"))
 		f.Write(CompileOnlyDeclarations(newAst))
 
-		// #include \"" + OutPath + ".h\"\n
 		f.Write(CompileOnlyInitializations(newAst))
 
 		if isMain {
