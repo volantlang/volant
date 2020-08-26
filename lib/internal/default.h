@@ -7,9 +7,7 @@
 #include "types.h"
 #include "heap.h"
 #include "vector.h"
-// #include "libuv.h"
 #include "promise.h"
-#include "function.h"
 
 #include "Block.h"
 

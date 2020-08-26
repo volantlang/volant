@@ -1,2 +1,2 @@
 language = "bash"
-run = "export GOPATH=$HOME/volant && go build -o ./bin/volant ./src"
+run = "install-pkg libblocksruntime-dev export GOPATH=$HOME/volant && go build -o ./bin/volant ./src"
