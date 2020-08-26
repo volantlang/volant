@@ -357,6 +357,12 @@ type (
 		Column   int
 	}
 
+	PromiseType struct {
+		BaseType Type
+		Line     int
+		Column   int
+	}
+
 	ImplictArrayType struct {
 		BaseType Type
 		Line     int
@@ -449,6 +455,7 @@ func (InternalType) isType()     {}
 func (NumberType) isType()       {}
 func (CaptureType) isType()      {}
 func (StaticType) isType()       {}
+func (PromiseType) isType()      {}
 
 func (BasicType) isExpression()        {}
 func (StructType) isExpression()       {}
@@ -466,6 +473,7 @@ func (InternalType) isExpression()     {}
 func (NumberType) isExpression()       {}
 func (CaptureType) isExpression()      {}
 func (StaticType) isExpression()       {}
+func (PromiseType) isExpression()      {}
 
 func (BasicType) isStatement()        {}
 func (StructType) isStatement()       {}
@@ -483,6 +491,7 @@ func (InternalType) isStatement()     {}
 func (NumberType) isStatement()       {}
 func (CaptureType) isStatement()      {}
 func (StaticType) isStatement()       {}
+func (PromiseType) isStatement()      {}
 
 func (s Block) LineM() int {
 	return s.Line
@@ -727,6 +736,9 @@ func (t CaptureType) LineM() int {
 func (t StaticType) LineM() int {
 	return t.Line
 }
+func (t PromiseType) LineM() int {
+	return t.Line
+}
 
 func (t BasicType) ColumnM() int {
 	return t.Column
@@ -774,6 +786,9 @@ func (t CaptureType) ColumnM() int {
 	return t.Column
 }
 func (t StaticType) ColumnM() int {
+	return t.Column
+}
+func (t PromiseType) ColumnM() int {
 	return t.Column
 }
 

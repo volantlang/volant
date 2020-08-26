@@ -1377,7 +1377,7 @@ func (parser *Parser) parseTypeAHH(state int) Type {
 		}
 		parser.eatLastToken()
 		return PointerType{BaseType: parser.parseTypeAHH(0), Line: line, Column: column}
-	case 2: // const/dynamic/capture/static keyword
+	case 2: // const/dynamic/capture/static/promise keyword
 		if token := parser.ReadToken(); token.PrimaryType == VecKeyword {
 			parser.eatLastToken()
 			return VecType{BaseType: parser.parseTypeAHH(0), Line: line, Column: column}
@@ -1390,6 +1390,9 @@ func (parser *Parser) parseTypeAHH(state int) Type {
 		} else if token.PrimaryType == StaticKeyword {
 			parser.eatLastToken()
 			return StaticType{BaseType: parser.parseTypeAHH(0), Line: line, Column: column}
+		} else if token.PrimaryType == PromiseKeyword {
+			parser.eatLastToken()
+			return PromiseType{BaseType: parser.parseTypeAHH(0), Line: line, Column: column}
 		}
 		return parser.parseTypeAHH(3)
 	case 3:
@@ -1436,6 +1439,7 @@ func (parser *Parser) parseTypeAHH(state int) Type {
 
 func (parser *Parser) parseExprOrType() Expression {
 	switch parser.ReadToken().PrimaryType {
+	case PromiseKeyword:
 	case ConstKeyword:
 	case VecKeyword:
 	case LeftBrace:

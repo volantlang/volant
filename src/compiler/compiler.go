@@ -558,6 +558,12 @@ func (c *Compiler) compoundLiteral(expr CompoundLiteral) {
 		c.append([]byte(strconv.Itoa(len(expr.Data.Values))))
 		c.closeParen()
 		return
+	case PromiseType:
+		c.append([]byte("new5"))
+		c.openParen()
+		c.Type(expr.Name.(PromiseType).BaseType, []byte{})
+		c.closeParen()
+		return
 	}
 
 	c.openParen()
@@ -784,6 +790,11 @@ func (c *Compiler) decType(Typ Type, expr Expression) {
 		c.Type(Typ.(VecType).BaseType, []byte{})
 		c.closeParen()
 		c.expression(expr)
+	case PromiseType:
+		c.append([]byte("PROMISE_TYPE("))
+		c.Type(Typ.(PromiseType).BaseType, []byte{})
+		c.closeParen()
+		c.expression(expr)
 	}
 }
 
@@ -929,6 +940,10 @@ func (c *Compiler) Type(Typ Type, buf []byte) {
 	case VecType:
 		c.append([]byte("VECTOR_TYPE("))
 		c.Type(Typ.(VecType).BaseType, buf)
+		c.closeParen()
+	case PromiseType:
+		c.append([]byte("PROMISE_TYPE("))
+		c.Type(Typ.(PromiseType).BaseType, buf)
 		c.closeParen()
 	}
 }

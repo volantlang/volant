@@ -459,6 +459,8 @@ func (f *Formatter) typ(typ Type) Type {
 		return PointerType{BaseType: f.typ(typ.(PointerType).BaseType)}
 	case VecType:
 		return VecType{BaseType: f.typ(typ.(VecType).BaseType)}
+	case PromiseType:
+		return PromiseType{BaseType: f.typ(typ.(PromiseType).BaseType)}
 	case ConstType:
 		return ConstType{BaseType: f.typ(typ.(ConstType).BaseType)}
 	case CaptureType:
@@ -774,6 +776,8 @@ func (f *Formatter) memberExpr(expr MemberExpr) Expression {
 		Typ2 = Typ.(StructType)
 	case VecType:
 		return f.getVecProp(expr)
+	case PromiseType:
+		return f.getPromiseProp(expr)
 	default:
 		return MemberExpr{Base: f.expr(expr.Base), Prop: f.NameSp.getPropName(expr.Prop)}
 	}
@@ -829,12 +833,27 @@ func (f *Formatter) getVecProp(expr MemberExpr) Expression {
 		return IdentExpr{Value: Token{Buff: []byte("VECTOR_POP")}}
 	case "concat":
 		return IdentExpr{Value: Token{Buff: []byte("VECTOR_CONCAT")}}
-	case "slice":
-		return IdentExpr{Value: Token{Buff: []byte("VECTOR_SLICE")}}
 	case "free":
 		return IdentExpr{Value: Token{Buff: []byte("VECTOR_FREE")}}
 	case "clone":
 		return IdentExpr{Value: Token{Buff: []byte("VECTOR_CLONE")}}
+	}
+	return nil
+}
+
+func (f *Formatter) getPromiseProp(expr MemberExpr) Expression {
+	switch string(expr.Prop.Buff) {
+	case "pending":
+		return UnaryExpr{
+			Op:   Token{Buff: []byte("!"), PrimaryType: LogicalOperator, SecondaryType: Not},
+			Expr: PointerMemberExpr{Base: f.expr(expr.Base), Prop: Token{Buff: []byte("state"), PrimaryType: Identifier}},
+		}
+	case "resolved":
+		return PointerMemberExpr{Base: f.expr(expr.Base), Prop: Token{Buff: []byte("state"), PrimaryType: Identifier}}
+	case "resolve":
+		return IdentExpr{Value: Token{Buff: []byte("PROMISE_RESOLVE")}}
+	case "then":
+		return IdentExpr{Value: Token{Buff: []byte("PROMISE_THEN")}}
 	}
 	return nil
 }
@@ -1010,9 +1029,33 @@ func (f *Formatter) getType(expr Expression) Type {
 			}
 		case VecType:
 			return f.getVectorPropType(Typ.(VecType), expr.(MemberExpr).Prop)
+		case PromiseType:
+			return f.getPromisePropType(Typ.(PromiseType), expr.(MemberExpr).Prop)
 		}
 	}
 
+	return nil
+}
+
+func (f *Formatter) getPromisePropType(prom PromiseType, prop Token) Type {
+	switch string(prop.Buff) {
+	case "then":
+		return FuncType{
+			Type:        OrdFunction,
+			ReturnTypes: []Type{VoidType.Type},
+			ArgTypes:    []Type{prom, FuncType{Type: OrdFunction, ReturnTypes: []Type{VoidType.Type}, ArgTypes: []Type{prom.BaseType}}},
+		}
+	case "resolve":
+		return FuncType{
+			Type:        OrdFunction,
+			ReturnTypes: []Type{VoidType.Type},
+			ArgTypes:    []Type{prom, prom.BaseType},
+		}
+	case "pending":
+		return BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("bool"), PrimaryType: Identifier}}}
+	case "resolved":
+		return BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("bool"), PrimaryType: Identifier}}}
+	}
 	return nil
 }
 
@@ -1020,37 +1063,31 @@ func (f *Formatter) getVectorPropType(vec VecType, prop Token) Type {
 	switch string(prop.Buff) {
 	case "push":
 		return FuncType{
-			Type:        OrdFunction | WorkFunction,
+			Type:        OrdFunction,
 			ReturnTypes: []Type{vec.BaseType},
 			ArgTypes:    []Type{vec, vec.BaseType},
 		}
 	case "pop":
 		return FuncType{
-			Type:        OrdFunction | WorkFunction,
+			Type:        OrdFunction,
 			ReturnTypes: []Type{vec.BaseType},
 			ArgTypes:    []Type{vec},
 		}
 	case "concat":
 		return FuncType{
-			Type:        OrdFunction | WorkFunction,
+			Type:        OrdFunction,
 			ReturnTypes: []Type{vec},
 			ArgTypes:    []Type{vec, vec},
 		}
-	case "slice":
-		return FuncType{
-			Type:        OrdFunction | WorkFunction,
-			ReturnTypes: []Type{vec},
-			ArgTypes:    []Type{vec, BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("size_t"), PrimaryType: Identifier}}}, BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("size_t"), PrimaryType: Identifier}}}},
-		}
 	case "free":
 		return FuncType{
-			Type:        OrdFunction | WorkFunction,
+			Type:        OrdFunction,
 			ReturnTypes: []Type{VoidType},
 			ArgTypes:    []Type{vec},
 		}
 	case "clone":
 		return FuncType{
-			Type:        OrdFunction | WorkFunction,
+			Type:        OrdFunction,
 			ReturnTypes: []Type{vec},
 			ArgTypes:    []Type{vec},
 		}
@@ -1205,6 +1242,13 @@ func (f *Formatter) compareTypes(Type1 Type, Type2 Type) bool {
 		default:
 			return false
 		}
+	case PromiseType:
+		switch Type2.(type) {
+		case PromiseType:
+			return f.compareTypes(Type1.(PromiseType).BaseType, Type2.(PromiseType).BaseType)
+		default:
+			return false
+		}
 	case ArrayType:
 		switch Type2.(type) {
 		case ArrayType:
@@ -1289,6 +1333,8 @@ func (f *Formatter) ofNamespace(typ Type, name Expression, t *SymbolTable) Type 
 		return PointerType{BaseType: f.ofNamespace(typ.(PointerType).BaseType, name, t), Line: typ.LineM(), Column: typ.ColumnM()}
 	case VecType:
 		return VecType{BaseType: f.ofNamespace(typ.(VecType).BaseType, name, t), Line: typ.LineM(), Column: typ.ColumnM()}
+	case PromiseType:
+		return VecType{BaseType: f.ofNamespace(typ.(PromiseType).BaseType, name, t), Line: typ.LineM(), Column: typ.ColumnM()}
 	case ArrayType:
 		return ArrayType{BaseType: f.ofNamespace(typ.(ArrayType).BaseType, name, t), Size: typ.(ArrayType).Size, Line: typ.LineM(), Column: typ.ColumnM()}
 	case ImplictArrayType:

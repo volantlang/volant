@@ -70,6 +70,7 @@ const (
 	UnionKeyword    PrimaryTokenType = 128
 	StaticKeyword   PrimaryTokenType = 129
 	CaptureKeyword  PrimaryTokenType = 130
+	PromiseKeyword  PrimaryTokenType = 131
 
 	// the parser stops parsing when it receives either of these types and shows the correct error message
 	EOF        PrimaryTokenType = 254
@@ -173,6 +174,7 @@ var Keywords = map[string]PrimaryTokenType{
 	"union":   UnionKeyword,
 	"static":  StaticKeyword,
 	"capture": CaptureKeyword,
+	"promise": PromiseKeyword,
 	// more stuff
 }
 

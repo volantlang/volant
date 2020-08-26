@@ -528,7 +528,7 @@ func (lexer *Lexer) lexOperator() Token {
 			lexer.eatLastByte()
 			return Token{PrimaryType: RelationalOperator, SecondaryType: NotEqual, Buff: []byte("!="), Line: line, Column: column}
 		default:
-			return Token{PrimaryType: BitwiseOperator, SecondaryType: Not, Buff: []byte("!"), Line: line, Column: column}
+			return Token{PrimaryType: LogicalOperator, SecondaryType: Not, Buff: []byte("!"), Line: line, Column: column}
 		}
 	case '>':
 		lexer.eatLastByte()

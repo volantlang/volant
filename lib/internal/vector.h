@@ -3,13 +3,6 @@
 
 #include "heap.h"
 
-#define VECTOR_TYPE(type)   \
-    struct {                \
-        size_t length;      \
-        size_t capacity;    \
-        type mem[];          \
-    } *  
-
 typedef struct BasicVector {
     size_t length;
     size_t capacity;
@@ -21,6 +14,13 @@ BasicVector *_vector_copy(BasicVector *, char *, size_t, size_t);
 BasicVector *_vector_resize(BasicVector *, size_t, size_t);
 BasicVector *_vector_concat(BasicVector *, BasicVector *, size_t);
 void _vector_free(BasicVector *);
+
+#define VECTOR_TYPE(type)   \
+    struct {                \
+        size_t length;      \
+        size_t capacity;    \
+        type mem[];         \
+    } *  
 
 #define VECTOR_NEW(type) (void *)_vector_new(sizeof(type))
 #define VECTOR_RESIZE(vector, num) _vector_resize((BasicVector*)vector, sizeof(BasicVector) + (num + vector->capacity), sizeof(*vector->mem)) 
@@ -35,8 +35,13 @@ void _vector_free(BasicVector *);
 #define VECTOR_POP(vector) ({ vector->length--; vector->mem[vector->length];})  
 #define VECTOR_CONCAT(vector1, vector2) (void *)_vector_concat((BasicVector *)vector1, (BasicVector *)vector2, sizeof(*vector1->mem))
 #define VECTOR_FREE(vector) _vector_free((BasicVector *)vector)
-#define VECTOR_CLONE(vector) (void *)_vector_clone(vector, sizeof(*vector->mem))
-#define VECTOR_SLICE(vector, start, end) (void *)_vector_slice(vector, start, end, sizeof(*vector->mem))
+#define VECTOR_CLONE(vector) (void *)_vector_clone((BasicVector *)vector, sizeof(*vector->mem))
+
+#define VECTOR_FOREACH(vector, block)                 \
+    for(size_t i = 0; i < vector->length; ++i){       \
+        typeof(vector->mem[0]) it = vector->mem[i];   \
+        block;                                        \
+    }
 
 BasicVector *_vector_new(size_t size_of_each_element){
     BasicVector *vector = malloc(sizeof(BasicVector)+size_of_each_element*8);
@@ -50,7 +55,6 @@ BasicVector *_vector_copy(BasicVector *vec, char *mem, size_t len, size_t el_siz
         _vector_resize(vec, len, el_size);
     }
     size_t size = len*el_size;
-    
     for(size_t i = 0; i < size; ++i) {
         vec->mem[i] = mem[i];
     }
@@ -66,13 +70,12 @@ BasicVector *_vector_resize(BasicVector *vector, size_t new_length, size_t el_si
 
 BasicVector *_vector_concat(BasicVector *first, BasicVector *second, size_t el_size) {
     size_t newLength = first->length + second->length;
-
     if(first->capacity < newLength){
         _vector_resize(first, newLength, el_size);
     } 
     size_t size1 = first->length*el_size;
     size_t size2 = second->length*el_size;
-
+    
     for(size_t i = 0; i < size2; ++i) {
         first->mem[i+size1] = second->mem[i];
     }

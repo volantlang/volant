@@ -533,8 +533,14 @@ func (s *SemanticAnalyzer) callExpr(expr CallExpr) {
 			case VecType:
 				l++
 				Args = append([]Expression{UnaryExpr{Expr: base, Op: Token{Buff: []byte("*"), PrimaryType: AirthmaticOperator, SecondaryType: Mul}}}, expr.Args...)
+			case PromiseType:
+				l++
+				Args = append([]Expression{UnaryExpr{Expr: base, Op: Token{Buff: []byte("*"), PrimaryType: AirthmaticOperator, SecondaryType: Mul}}}, expr.Args...)
 			}
 		case VecType:
+			l++
+			Args = append([]Expression{base}, expr.Args...)
+		case PromiseType:
 			l++
 			Args = append([]Expression{base}, expr.Args...)
 		}
@@ -672,6 +678,7 @@ func (s *SemanticAnalyzer) compoundLiteral(cl CompoundLiteral) {
 			}
 		}
 	case VecType:
+	case PromiseType:
 	case ArrayType:
 	case ImplictArrayType:
 		break
@@ -984,9 +991,34 @@ func (s *SemanticAnalyzer) getType(expr Expression) Type {
 			}
 		case VecType:
 			return s.getVectorPropType(Typ7.(VecType), expr.(MemberExpr).Prop)
+		case PromiseType:
+			return s.getPromisePropType(Typ7.(PromiseType), expr.(MemberExpr).Prop)
 		}
 	}
 
+	return nil
+}
+
+func (s *SemanticAnalyzer) getPromisePropType(prom PromiseType, prop Token) Type {
+	switch string(prop.Buff) {
+	case "then":
+		return FuncType{
+			Type:        OrdFunction,
+			ReturnTypes: []Type{VoidType.Type},
+			ArgTypes:    []Type{prom, FuncType{Type: OrdFunction, ReturnTypes: []Type{VoidType.Type}, ArgTypes: []Type{prom.BaseType}}},
+		}
+	case "resolve":
+		return FuncType{
+			Type:        OrdFunction,
+			ReturnTypes: []Type{VoidType.Type},
+			ArgTypes:    []Type{prom, prom.BaseType},
+		}
+	case "pending":
+		return BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("bool"), PrimaryType: Identifier}}}
+	case "resolved":
+		return BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("bool"), PrimaryType: Identifier}}}
+	}
+	s.error("burh", prop.Line, prop.Column)
 	return nil
 }
 
@@ -994,37 +1026,31 @@ func (s *SemanticAnalyzer) getVectorPropType(vec VecType, prop Token) Type {
 	switch string(prop.Buff) {
 	case "push":
 		return FuncType{
-			Type:        OrdFunction | WorkFunction,
+			Type:        OrdFunction,
 			ReturnTypes: []Type{vec.BaseType},
 			ArgTypes:    []Type{vec, vec.BaseType},
 		}
 	case "pop":
 		return FuncType{
-			Type:        OrdFunction | WorkFunction,
+			Type:        OrdFunction,
 			ReturnTypes: []Type{vec.BaseType},
 			ArgTypes:    []Type{vec},
 		}
 	case "concat":
 		return FuncType{
-			Type:        OrdFunction | WorkFunction,
+			Type:        OrdFunction,
 			ReturnTypes: []Type{vec},
 			ArgTypes:    []Type{vec, vec},
 		}
-	case "slice":
-		return FuncType{
-			Type:        OrdFunction | WorkFunction,
-			ReturnTypes: []Type{vec},
-			ArgTypes:    []Type{vec, BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("size_t"), PrimaryType: Identifier}}}, BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("size_t"), PrimaryType: Identifier}}}},
-		}
 	case "free":
 		return FuncType{
-			Type:        OrdFunction | WorkFunction,
+			Type:        OrdFunction,
 			ReturnTypes: []Type{VoidType},
 			ArgTypes:    []Type{vec},
 		}
 	case "clone":
 		return FuncType{
-			Type:        OrdFunction | WorkFunction,
+			Type:        OrdFunction,
 			ReturnTypes: []Type{vec},
 			ArgTypes:    []Type{vec},
 		}
@@ -1172,6 +1198,13 @@ func (s *SemanticAnalyzer) compareTypes(Type1 Type, Type2 Type) bool {
 		switch Type2.(type) {
 		case VecType:
 			return s.compareTypes(Type1.(VecType).BaseType, Type2.(VecType).BaseType)
+		default:
+			return false
+		}
+	case PromiseType:
+		switch Type2.(type) {
+		case PromiseType:
+			return s.compareTypes(Type1.(PromiseType).BaseType, Type2.(PromiseType).BaseType)
 		default:
 			return false
 		}
@@ -1364,6 +1397,8 @@ func (s *SemanticAnalyzer) ofNamespace(typ Type, name Expression, t *SymbolTable
 		return PointerType{BaseType: s.ofNamespace(typ.(PointerType).BaseType, name, t), Line: typ.LineM(), Column: typ.ColumnM()}
 	case VecType:
 		return VecType{BaseType: s.ofNamespace(typ.(VecType).BaseType, name, t), Line: typ.LineM(), Column: typ.ColumnM()}
+	case PromiseType:
+		return PromiseType{BaseType: s.ofNamespace(typ.(PromiseType).BaseType, name, t), Line: typ.LineM(), Column: typ.ColumnM()}
 	case ArrayType:
 		return ArrayType{BaseType: s.ofNamespace(typ.(ArrayType).BaseType, name, t), Size: typ.(ArrayType).Size, Line: typ.LineM(), Column: typ.ColumnM()}
 	case ImplictArrayType:
