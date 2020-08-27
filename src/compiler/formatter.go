@@ -173,7 +173,7 @@ func (f *Formatter) tupl(typ TupleType) TupleType {
 
 func (f *Formatter) union(typ UnionType) UnionType {
 	for x, prop := range typ.Identifiers {
-		typ.Identifiers[x] = f.NameSp.getNewVarName(prop)
+		typ.Identifiers[x] = f.NameSp.getPropName(prop)
 	}
 	return UnionType{Identifiers: typ.Identifiers, Types: f.typeArray(typ.Types)}
 }

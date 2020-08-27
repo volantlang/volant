@@ -1074,9 +1074,9 @@ func (s *SemanticAnalyzer) getType(expr Expression) Type {
 			}
 			return s.ofNamespace(s.getPropType(expr.(MemberExpr).Prop, Typ9), base, table)
 		case UnionType:
-			for x, prop := range Typ.(UnionType).Identifiers {
+			for x, prop := range Typ7.(UnionType).Identifiers {
 				if bytes.Compare(prop.Buff, expr.(MemberExpr).Prop.Buff) == 0 {
-					return Typ.(UnionType).Types[x]
+					return Typ7.(UnionType).Types[x]
 				}
 			}
 		case VecType:
