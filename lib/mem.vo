@@ -6,18 +6,13 @@ export func work copy(dest: *void, src: *void, length: size_t) *void {
 }
 
 export func work compare(first: *void, second: *void, length: size_t) i32 {
-    for i: size_t = 0; i < length; ++i {
-        diff := (cast(*u8)first)[i] - (cast(*u8)second)[i];
-
-        if diff == 0 {
-            continue;
-        } else if diff > 0 {
-            return 1;
-        } else {
-            return -1;
-        }
+    l, r: *u8 = first, second;
+    for length != 0 && *l == *r {
+        --length;
+        ++l;
+        ++r;
     }
-    return 0;
+    return length ? *l-*r : 0;
 }
 
 export func work set(ptr: *void, char: u8, length: size_t) *void {
