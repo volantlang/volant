@@ -6,8 +6,3 @@ export func work copy(fnc: *void) *void {
 export func work free(fnc: *void) {
     $Block_release(fnc);
 };
-/*
-export func work toCFunction(fnc: *void) * void {
-    return $_to_c_func(fnc);
-};
-*/

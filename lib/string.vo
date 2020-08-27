@@ -1,6 +1,33 @@
-export typedef String vec u8;
+struct String {
+    mem: vec u8;
+    func concat(self: *String, str: String) {
+        self.mem.concat(str.mem);
+    };
+    func bytes(self: *String) *u8 {
+        return &self.mem[0];
+    };
+    func push(self: *String, char: u8) {
+        self.mem.push(char);
+    };
+    func pop(self: *String) u8 {
+        return self.mem.pop();
+    };
+    func clone(self: *String) *String {
+        str := new String;
+        str.mem = self.mem.clone();
+        return str;
+    };
+    func charAt(self: *String, index: size_t) u8 {
+        return self.mem[index];
+    };
+    func toLower(self: *String) {
+        for i := 0; i < self.mem.length; ++i {
+            
+        }
+    };
+};
 
-export func work from(bytes: u8[]) String {
+export func work from(bytes: *u8) String {
     str := (String){};
 
     c = bytes[0]
@@ -9,8 +36,4 @@ export func work from(bytes: u8[]) String {
         c = bytes[c];
     }
     return str;
-}
-
-export func work toLower() String {
-
 }

@@ -1,5 +1,9 @@
-export func printChar(char: i8){
+export func work printChar(char: i8){
     $putchar(char);
+}
+
+export func work getChar() i8 {
+    return cast(i8)$getchar();
 }
 
 export func work print(buf: *i8){
@@ -13,4 +17,12 @@ export func work print(buf: *i8){
 export func work println(buf: *i8){
     print(buf);
     printChar('\n');
+}
+
+export func work scan() *void {
+    str := (vec u8){};
+    for char := getChar(); char != '\n'; char = getChar() {
+        str.push(char);
+    }
+    return cast(*void)str;
 }
