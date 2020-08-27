@@ -563,21 +563,27 @@ func (f *Formatter) compoundLiteral(expr CompoundLiteral) CompoundLiteral {
 			}
 		}
 	}
+
+	Typ = f.getType(Typ.(BasicType).Expr)
+	var StrctName Token
+
 	switch Typ.(type) {
 	case Typedef:
+		StrctName = Typ.(Typedef).Name
+	default:
+		return CompoundLiteral{Name: Name, Data: f.compoundLiteralData(expr.Data)}
+	}
+
+	Typ = f.getRootType(Typ)
+
+	switch Typ.(type) {
+	case StructType:
 		break
 	default:
 		return CompoundLiteral{Name: Name, Data: f.compoundLiteralData(expr.Data)}
 	}
 
-	switch Typ.(Typedef).Type.(type) {
-	case StructType:
-		break
-	case TupleType:
-		return CompoundLiteral{Name: Name, Data: f.compoundLiteralData(expr.Data)}
-	}
-
-	strct := Typ.(Typedef).Type.(StructType)
+	strct := Typ.(StructType)
 	data := f.compoundLiteralData(expr.Data)
 
 	if len(data.Fields) == 0 && len(data.Values) > 0 {
@@ -599,7 +605,7 @@ func (f *Formatter) compoundLiteral(expr CompoundLiteral) CompoundLiteral {
 					continue
 				}
 				data.Values = append(data.Values, MemberExpr{
-					Base: IdentExpr{Value: f.NameSp.getStrctDefaultNameFromPrefix(prefix, Typ.(Typedef).Name)},
+					Base: IdentExpr{Value: f.NameSp.getStrctDefaultNameFromPrefix(prefix, StrctName)},
 					Prop: f.NameSp.getPropName(Ident),
 				})
 			}
@@ -611,14 +617,18 @@ func (f *Formatter) compoundLiteral(expr CompoundLiteral) CompoundLiteral {
 				if hasField(data.Fields, Ident) {
 					continue
 				}
-				switch prop.Types[j].(type) {
+				t := prop.Types[j]
+
+				switch t.(type) {
 				case FuncType:
-					continue
+					if !t.(FuncType).Mut {
+						continue
+					}
 				}
 
 				data.Fields = append(data.Fields, f.NameSp.getPropName(Ident))
 				data.Values = append(data.Values, MemberExpr{
-					Base: IdentExpr{Value: f.NameSp.getStrctDefaultNameFromPrefix(prefix, Typ.(Typedef).Name)},
+					Base: IdentExpr{Value: f.NameSp.getStrctDefaultNameFromPrefix(prefix, StrctName)},
 					Prop: f.NameSp.getPropName(Ident),
 				})
 			}

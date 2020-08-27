@@ -1098,7 +1098,7 @@ func (c *Compiler) strctDefault(strct Typedef) {
 	c.openCurlyBrace()
 	for _, prop := range strct.Type.(StructType).Props {
 		if len(prop.Values) == 0 {
-			break
+			continue
 		}
 		for x, Ident := range prop.Identifiers {
 			t := prop.Types[x]
@@ -1133,9 +1133,10 @@ func (c *Compiler) strctMethods(strct StructType) {
 				if t.(FuncType).Mut {
 					continue
 				}
+			default:
+				continue
 			}
 			c.declarationType(prop.Types[i], prop.Identifiers[i])
-			// c.block(val.(FuncExpr).Block)
 			c.space()
 			c.equal()
 			c.space()
@@ -1151,7 +1152,9 @@ func (c *Compiler) strctMethodsOnlyDec(strct StructType) {
 		for i := range prop.Values {
 			switch prop.Types[i].(type) {
 			case FuncType:
-				break
+				if prop.Types[i].(FuncType).Mut {
+					break
+				}
 			default:
 				continue
 			}

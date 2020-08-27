@@ -12,7 +12,7 @@
             "mode": "debug",
             "cwd": ".",
             "program": "${workspaceFolder}/src",
-            "args": ["-compile", "../../test/closures/main.vo"],
+            "args": ["compile", "../../test/examples/structs/main.vo"],
             "dlvLoadConfig": {
                 "followPointers": true,
                 "maxVariableRecurse": 1,

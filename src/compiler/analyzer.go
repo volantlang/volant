@@ -821,6 +821,7 @@ func (s *SemanticAnalyzer) propDeclaration(dec Declaration) []Type {
 		for _, val := range dec.Values {
 			Types = append(Types, Type)
 			Type2 := s.getType(val)
+
 			if s.compareTypes(Type2, Type) {
 				continue
 			}
@@ -832,6 +833,7 @@ func (s *SemanticAnalyzer) propDeclaration(dec Declaration) []Type {
 		}
 		for _, val := range dec.Values {
 			Typ := s.getType(val)
+
 			switch Typ.(type) {
 			case NumberType:
 				Typ = I32Type.Type

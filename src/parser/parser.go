@@ -1172,11 +1172,6 @@ func (parser *Parser) parseExpr(state int) Expression {
 	case 9: // function call, postfix ++/--, struct/array members
 		expr := parser.parseExpr(10)
 
-		if token := parser.ReadToken(); token.SecondaryType == AddAdd || token.SecondaryType == SubSub {
-			parser.eatLastToken()
-			return PostfixUnaryExpr{Op: token, Expr: expr, Line: line, Column: column}
-		}
-
 		for {
 			line, column := parser.pos()
 
@@ -1193,6 +1188,9 @@ func (parser *Parser) parseExpr(state int) Expression {
 				parser.expect(RightParen, SecondaryNullType)
 				parser.eatLastToken()
 
+			} else if token.SecondaryType == AddAdd || token.SecondaryType == SubSub {
+				parser.eatLastToken()
+				return PostfixUnaryExpr{Op: token, Expr: expr, Line: line, Column: column}
 			} else if token.PrimaryType == LeftBrace {
 				parser.eatLastToken()
 				expr2 := parser.parseExpr(0)
