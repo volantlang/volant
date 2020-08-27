@@ -610,6 +610,30 @@ func (f *Formatter) compoundLiteral(expr CompoundLiteral) CompoundLiteral {
 				})
 			}
 		}
+		for _, superSt := range strct.SuperStructs {
+			superSt := f.getRootType(f.getType(superSt)).(StructType)
+
+			for _, prop := range superSt.Props {
+				for j, Ident := range prop.Identifiers {
+					t := prop.Types[j]
+					switch t.(type) {
+					case FuncType:
+						if !t.(FuncType).Mut {
+							continue
+						}
+					}
+					data.Fields = append(data.Fields, f.NameSp.getPropName(Ident))
+					x++
+					if x <= l {
+						continue
+					}
+					data.Values = append(data.Values, MemberExpr{
+						Base: IdentExpr{Value: f.NameSp.getStrctDefaultNameFromPrefix(prefix, StrctName)},
+						Prop: f.NameSp.getPropName(Ident),
+					})
+				}
+			}
+		}
 	} else {
 		for _, prop := range strct.Props {
 			for j, Ident := range prop.Identifiers {
@@ -631,6 +655,27 @@ func (f *Formatter) compoundLiteral(expr CompoundLiteral) CompoundLiteral {
 					Base: IdentExpr{Value: f.NameSp.getStrctDefaultNameFromPrefix(prefix, StrctName)},
 					Prop: f.NameSp.getPropName(Ident),
 				})
+			}
+		}
+		for _, superSt := range strct.SuperStructs {
+			superSt := f.getRootType(f.getType(superSt)).(StructType)
+
+			for _, prop := range superSt.Props {
+				for j, Ident := range prop.Identifiers {
+					t := prop.Types[j]
+					switch t.(type) {
+					case FuncType:
+						if !t.(FuncType).Mut {
+							continue
+						}
+					}
+
+					data.Fields = append(data.Fields, f.NameSp.getPropName(Ident))
+					data.Values = append(data.Values, MemberExpr{
+						Base: IdentExpr{Value: f.NameSp.getStrctDefaultNameFromPrefix(prefix, StrctName)},
+						Prop: f.NameSp.getPropName(Ident),
+					})
+				}
 			}
 		}
 	}
