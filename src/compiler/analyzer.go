@@ -1278,7 +1278,9 @@ func (s *SemanticAnalyzer) compareTypes(Type1 Type, Type2 Type) bool {
 	case PointerType:
 		switch Type2.(type) {
 		case PointerType:
-			return s.compareTypes(Type1.(PointerType).BaseType, Type2.(PointerType).BaseType)
+			return s.compareTypes(Type2.(PointerType).BaseType, BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("void"), PrimaryType: Identifier}}}) || s.compareTypes(Type1.(PointerType).BaseType, Type2.(PointerType).BaseType)
+		case FuncType:
+			return s.compareTypes(Type1.(PointerType).BaseType, BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("void"), PrimaryType: Identifier}}})
 		default:
 			return false
 		}
@@ -1316,6 +1318,8 @@ func (s *SemanticAnalyzer) compareTypes(Type1 Type, Type2 Type) bool {
 		switch Type2.(type) {
 		case FuncType:
 			break
+		case PointerType:
+			return s.compareTypes(Type2.(PointerType).BaseType, BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("void"), PrimaryType: Identifier}}})
 		default:
 			return false
 		}

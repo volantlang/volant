@@ -6,7 +6,7 @@ import (
 	"os"
 	. "parser"
 	"path"
-	Path "path"
+	Path "path/filepath"
 	"strconv"
 )
 
@@ -32,7 +32,13 @@ func ImportFile(dir string, base string, isMain bool, num2 int) *SymbolTable {
 	}
 
 	path := Path.Join(dir, base)
-	OutPath := Path.Join(ProjectDir, "_build", Path.Base(dir), Path.Dir(base), n2+Path.Base(base))
+	rel, err := Path.Rel(ProjectDir, dir)
+	OutPath := Path.Join(ProjectDir, "_build")
+
+	if err == nil {
+		OutPath = Path.Join(OutPath, rel)
+	}
+	OutPath = Path.Join(OutPath, Path.Dir(base), n2+Path.Base(base))
 
 	if isMain {
 		OutPath += ".c"
