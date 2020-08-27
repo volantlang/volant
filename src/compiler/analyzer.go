@@ -1010,6 +1010,8 @@ func (s *SemanticAnalyzer) getType(expr Expression) Type {
 		return PointerType{BaseType: expr.(HeapAlloc).Type}
 	case CompoundLiteral:
 		return expr.(CompoundLiteral).Name
+	case SizeExpr:
+		return BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("size_t"), PrimaryType: Identifier}}}
 	case MemberExpr:
 		switch expr.(MemberExpr).Base.(type) {
 		case IdentExpr:
@@ -1453,11 +1455,11 @@ func (s *SemanticAnalyzer) lenExpr(lenExpr LenExpr) {
 }
 
 func (s *SemanticAnalyzer) sizeExpr(sizeExpr SizeExpr) {
-	switch sizeExpr.Type.(type) {
-	case BasicType:
-		s.expr(sizeExpr.Type.(BasicType).Expr)
+	switch sizeExpr.Expr.(type) {
+	case Type:
+		s.typ(sizeExpr.Expr.(Type))
 	default:
-		s.typ(sizeExpr.Type)
+		s.expr(sizeExpr.Expr)
 	}
 }
 

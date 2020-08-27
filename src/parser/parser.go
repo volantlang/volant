@@ -1161,12 +1161,12 @@ func (parser *Parser) parseExpr(state int) Expression {
 			parser.expect(LeftParen, SecondaryNullType)
 			parser.eatLastToken()
 
-			Typ := parser.parseType()
+			e := parser.parseExprOrType()
 
 			parser.expect(RightParen, SecondaryNullType)
 			parser.eatLastToken()
 
-			return SizeExpr{Type: Typ, Line: line, Column: column}
+			return SizeExpr{Expr: e, Line: line, Column: column}
 		}
 		return parser.parseExpr(9)
 	case 9: // function call, postfix ++/--, struct/array members

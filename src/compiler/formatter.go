@@ -752,15 +752,13 @@ func (f *Formatter) lenExpr(expr LenExpr) Expression {
 }
 
 func (f *Formatter) sizeExpr(expr SizeExpr) CallExpr {
-	var Expr Expression
-	Typ := expr.Type
+	Expr := expr.Expr
 
-	switch Typ.(type) {
-	case BasicType:
-		Typ = f.getType(Typ.(BasicType).Expr)
-		Expr = f.expr(Typ.(BasicType).Expr)
+	switch Expr.(type) {
+	case Type:
+		Expr = f.typ(Expr.(Type))
 	default:
-		Expr = f.typ(Typ)
+		Expr = f.expr(Expr)
 	}
 
 	return CallExpr{Function: IdentExpr{Value: Token{Buff: []byte("sizeof")}}, Args: []Expression{Expr}}
@@ -1013,6 +1011,8 @@ func (f *Formatter) getType(expr Expression) Type {
 		return PointerType{BaseType: expr.(HeapAlloc).Type}
 	case CompoundLiteral:
 		return expr.(CompoundLiteral).Name
+	case SizeExpr:
+		return BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("size_t"), PrimaryType: Identifier}}}
 	case MemberExpr:
 		Typ := f.getType(expr.(MemberExpr).Base)
 
@@ -1074,9 +1074,9 @@ func (f *Formatter) getType(expr Expression) Type {
 			}
 			return f.ofNamespace(f.getPropType(expr.(MemberExpr).Prop, Typ9), base, table)
 		case UnionType:
-			for x, prop := range Typ.(UnionType).Identifiers {
+			for x, prop := range Typ7.(UnionType).Identifiers {
 				if bytes.Compare(prop.Buff, expr.(MemberExpr).Prop.Buff) == 0 {
-					return Typ.(UnionType).Types[x]
+					return Typ7.(UnionType).Types[x]
 				}
 			}
 		case VecType:

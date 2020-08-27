@@ -282,7 +282,7 @@ type (
 	}
 
 	SizeExpr struct {
-		Type   Type
+		Expr   Expression
 		Line   int
 		Column int
 	}
