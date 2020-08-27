@@ -14,20 +14,24 @@ var libPath = path.Join(path.Dir(exPath), "../lib")
 var defaultH = path.Join(libPath, "internal/default.h")
 
 func main() {
-	fileName := flag.String("compile", "", "file to be compiled")
-	flag.Parse()
+    if len(os.Args) < 2 {
+        fmt.Println("no arguments given")
+        os.Exit(1)
+    }
+    switch os.Args[1] {
+    case "compile":
+        if len(os.Args) < 3{
+            fmt.Println("file name not given")
+        }
+        cmd := flag.NewFlagSet("compile",flag.ExitOnError)
+        clang := cmd.String("clang","","pass arguments to the clang compiler")
+        file := path.Clean(os.Args[2])
+        cmd.Parse(os.Args[3:])
+        ImportFile(path.Dir(file), path.Base(file), true, 0)
+        out, err := exec.Command("clang", path.Join(path.Dir(file), "_build", "0"+path.Base(file)+".c"), "-pthread", "-luv", "-fblocks", "-lBlocksRuntime", "-lgc", "-I"+libPath, clang,"-o", path.Join(path.Dir(file), "a.out")).CombinedOutput()
 
-	file := path.Clean(*fileName)
-
-	if file == "" {
-		fmt.Println("file name not given")
-		os.Exit(1)
-	}
-
-	ImportFile(path.Dir(file), path.Base(file), true, 0)
-	out, err := exec.Command("clang", path.Join(path.Dir(file), "_build", "0"+path.Base(file)+".c"), "-pthread", "-luv", "-fblocks", "-lBlocksRuntime", "-lgc", "-I"+libPath, "-o", path.Join(path.Dir(file), "a.out")).CombinedOutput()
-
-	if err != nil {
-		fmt.Println(string(out))
-	}
+        if err != nil {
+            fmt.Println(string(out))
+        }
+    }
 }
