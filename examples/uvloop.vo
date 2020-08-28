@@ -6,7 +6,7 @@ cb := func (timer: *uv.Timer) {
     $printf("hehehehehhehe %i %i\n", a++, *data);
 };
 
-// the lang will provide in-built support for these functions soon
+// volant will provide in-built support for these functions soon
 setTimeout := func (timeout: u64, callback: func(*uv.Timer), data: *void) *uv.Timer {
     timer := new uv.Timer{};
     timer.init(uv.getDefaultLoop());
@@ -29,12 +29,12 @@ func main() i32 {
     x := new u8(100);
 
     setTimeout(1000, func (timer: *uv.Timer) {
-        $printf("x is %u\n", *x);
+        $printf("x is %u\n", *x); // x is a const in this scope because we didn't use the `capture` flag
     }, null);
 
     setInterval(100, cb, cast(*void)x);
     
-    // this will be handled internally by the lang in future
+    // this will be handled internally by volant in future
     for r: i32 = 1; r != 0 {
         r = loop.run(uv.RunMode.Default);
     }

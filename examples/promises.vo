@@ -1,0 +1,15 @@
+import "io.vo";
+
+func main() i32 {
+    prom: promise *i8; // create an uninitialized promise that resolves to a value of *i8
+    prom = (promise *i8){}; // initialize promise
+    
+    prom.then(func(val: *i8){
+        io.println(val);
+    });
+
+    io.println("hehe");
+    prom.resolve("haha");
+
+    return 0;
+}

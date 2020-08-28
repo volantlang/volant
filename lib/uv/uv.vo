@@ -118,21 +118,6 @@ export struct Handle {
 	}
 }
 
-// Req
-export enum ReqType {
-	UnknownReq = 0,
-	Req,
-	Connect,
-	Write,
-	Shutdown,
-	UdpSend,
-	Fs,
-	Work,
-	GetAddrInfo,
-	GetNameInfo,
-	ReqTypeMax
-}
-
 // Timer
 export struct Timer {
 	..Handle;
@@ -183,6 +168,20 @@ export struct Check {
 }
 
 // Req
+export enum ReqType {
+	UnknownReq = 0,
+	Req,
+	Connect,
+	Write,
+	Shutdown,
+	UdpSend,
+	Fs,
+	Work,
+	GetAddrInfo,
+	GetNameInfo,
+	ReqTypeMax
+}
+
 export struct Req {
 	__req: $uv_any_req;
 
