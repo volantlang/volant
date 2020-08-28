@@ -562,6 +562,8 @@ func (f *Formatter) compoundLiteral(expr CompoundLiteral) CompoundLiteral {
 				prefix = string(t[1:])
 			}
 		}
+	default:
+		return CompoundLiteral{Name: Name, Data: f.compoundLiteralData(expr.Data)}
 	}
 
 	Typ = f.getType(Typ.(BasicType).Expr)
@@ -1279,7 +1281,7 @@ func (f *Formatter) compareTypes(Type1 Type, Type2 Type) bool {
 				return false
 			}
 		}
-		// needs work
+		return f.compareTypes(BasicType{Expr: Type2.(BasicType).Expr.(MemberExpr).Base}, BasicType{Expr: Type1.(BasicType).Expr.(MemberExpr).Base}) && bytes.Compare(Type2.(BasicType).Expr.(MemberExpr).Prop.Buff, Type1.(BasicType).Expr.(MemberExpr).Prop.Buff) == 0
 	case PointerType:
 		switch Type2.(type) {
 		case PointerType:

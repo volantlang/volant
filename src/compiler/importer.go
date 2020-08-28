@@ -83,6 +83,7 @@ func ImportFile(dir string, base string, isMain bool, num2 int) *SymbolTable {
 		} else {
 			f.Write([]byte("\n#endif"))
 		}
+		f.Close()
 
 		return exports
 	}

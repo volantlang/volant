@@ -1,23 +1,23 @@
 export func work copy(dest: *void, src: *void, length: size_t) *void {
-    l, r: *u8 = dest, src; 
+    l, r := cast(*u8)dest, cast(*u8)src; 
     for i: size_t = 0; i < length; ++i {
         l[i] = r[i]; 
     }
     return dest;
 }
 
-export func work compare(first: *void, second: *void, length: size_t) i32 {
-    l, r: *u8 = first, second;
+export func work compare(first: *void, second: *void, length: size_t) i8 {
+    l, r := cast(*u8)first, cast(*u8)second;
     for length != 0 && *l == *r {
         --length;
         ++l;
         ++r;
     }
-    return length ? *l-*r : 0;
+    return length ? cast(i8)(*l-*r) : 0;
 }
 
 export func work set(ptr: *void, char: u8, length: size_t) *void {
-    l: *u8 = ptr;
+    l := cast(*u8)ptr;
     for i: size_t = 0; i < length; ++i {
         l[i] = char;
     }

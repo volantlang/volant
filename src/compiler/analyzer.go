@@ -50,6 +50,7 @@ func AnalyzeFile(ast File, pathh string) (*SymbolTable, map[string]*SymbolTable,
 
 	s.addSymbol(True.Value, BoolType.Type)
 	s.addSymbol(False.Value, BoolType.Type)
+	s.addSymbol(Null.Value, VoidType.Type)
 
 	for _, statement := range ast.Statements {
 		s.globalStmt(statement)
@@ -375,15 +376,51 @@ func (s *SemanticAnalyzer) expr(expr Expression) {
 		lType := s.getType(bExpr.Left)
 		rType := s.getType(bExpr.Right)
 
-		if !s.compareTypes(lType, rType) {
-			s.error("Type mismatch: expected {lType}, got {rType}", bExpr.LineM(), bExpr.ColumnM())
+		if s.compareTypes(lType, rType) {
+			return
 		}
-		/*
-			switch bExpr.Op.PrimaryType {
-			case AirthmaticOperator:
 
+		lType = s.getRootType(lType)
+		rType = s.getRootType(rType)
+
+		switch lType.(type) {
+		case PointerType:
+			switch rType.(type) {
+			case NumberType:
+				return
 			}
-		*/
+			if (s.compareTypes(rType, BasicType{Expr: IdentExpr{Value: I8Token}}) ||
+				s.compareTypes(rType, BasicType{Expr: IdentExpr{Value: I16Token}}) ||
+				s.compareTypes(rType, BasicType{Expr: IdentExpr{Value: I32Token}}) ||
+				s.compareTypes(rType, BasicType{Expr: IdentExpr{Value: I64Token}}) ||
+				s.compareTypes(rType, BasicType{Expr: IdentExpr{Value: U8Token}}) ||
+				s.compareTypes(rType, BasicType{Expr: IdentExpr{Value: U16Token}}) ||
+				s.compareTypes(rType, BasicType{Expr: IdentExpr{Value: U32Token}}) ||
+				s.compareTypes(rType, BasicType{Expr: IdentExpr{Value: U64Token}}) ||
+				s.compareTypes(rType, BasicType{Expr: IdentExpr{Value: SizeTToken}})) {
+				return
+			}
+		}
+		switch rType.(type) {
+		case PointerType:
+			switch lType.(type) {
+			case NumberType:
+				return
+			}
+			if (s.compareTypes(lType, BasicType{Expr: IdentExpr{Value: I8Token}}) ||
+				s.compareTypes(lType, BasicType{Expr: IdentExpr{Value: I16Token}}) ||
+				s.compareTypes(lType, BasicType{Expr: IdentExpr{Value: I32Token}}) ||
+				s.compareTypes(lType, BasicType{Expr: IdentExpr{Value: I64Token}}) ||
+				s.compareTypes(lType, BasicType{Expr: IdentExpr{Value: U8Token}}) ||
+				s.compareTypes(lType, BasicType{Expr: IdentExpr{Value: U16Token}}) ||
+				s.compareTypes(lType, BasicType{Expr: IdentExpr{Value: U32Token}}) ||
+				s.compareTypes(lType, BasicType{Expr: IdentExpr{Value: U64Token}}) ||
+				s.compareTypes(lType, BasicType{Expr: IdentExpr{Value: SizeTToken}})) {
+				return
+			}
+		}
+
+		s.error("Type mismatch: expected {lType}, got {rType}", bExpr.LineM(), bExpr.ColumnM())
 	case PostfixUnaryExpr:
 		s.expr(expr.(PostfixUnaryExpr).Expr)
 	case TernaryExpr:
@@ -944,6 +981,10 @@ func (s *SemanticAnalyzer) getType(expr Expression) Type {
 		}
 		s.error("Use of undeclared variable '"+string(Ident.Buff)+"'.", Ident.Line, Ident.Column)
 	case BinaryExpr:
+		if expr.(BinaryExpr).Op.PrimaryType == RelationalOperator {
+			return BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("bool"), PrimaryType: Identifier}}}
+		}
+
 		lt := s.getType(expr.(BinaryExpr).Left)
 
 		switch lt.(type) {
@@ -953,6 +994,7 @@ func (s *SemanticAnalyzer) getType(expr Expression) Type {
 		default:
 			return lt
 		}
+
 		return s.getType(expr.(BinaryExpr).Right)
 	case TernaryExpr:
 		lt := s.getType(expr.(TernaryExpr).Left)
@@ -1012,6 +1054,8 @@ func (s *SemanticAnalyzer) getType(expr Expression) Type {
 		return expr.(CompoundLiteral).Name
 	case SizeExpr:
 		return BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("size_t"), PrimaryType: Identifier}}}
+	case ArrayLiteral:
+		return InternalType{}
 	case MemberExpr:
 		switch expr.(MemberExpr).Base.(type) {
 		case IdentExpr:

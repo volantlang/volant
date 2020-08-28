@@ -1,5 +1,3 @@
-import "mem.vo";
-
 export func work malloc(s: size_t) *void {
     return cast(*void)$malloc(s);
 }
