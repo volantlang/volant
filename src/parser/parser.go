@@ -55,15 +55,15 @@ func (parser *Parser) expect(primary PrimaryTokenType, secondary SecondaryTokenT
 
 	if primary == PrimaryNullType {
 		if token.SecondaryType != secondary {
-			error.New("expected "+SecondaryTypes[secondary]+", got "+token.Serialize(), token.Line, token.Column)
+			error.New("expected '"+SecondaryTypes[secondary]+"', got '"+token.Serialize()+"'.", token.Line, token.Column)
 		}
 	} else if secondary == SecondaryNullType {
 		if token.PrimaryType != primary {
-			error.New("expected "+PrimaryTypes[primary]+", got "+token.Serialize(), token.Line, token.Column)
+			error.New("expected '"+PrimaryTypes[primary]+"', got '"+token.Serialize()+"'.", token.Line, token.Column)
 		}
 	} else {
 		if token.PrimaryType != primary || token.SecondaryType != secondary {
-			error.New("expected "+PrimaryTypes[primary]+" and "+SecondaryTypes[secondary]+", got "+token.Serialize(), token.Line, token.Column)
+			error.New("expected '"+SecondaryTypes[secondary]+"', got '"+token.Serialize()+"'.", token.Line, token.Column)
 		}
 	}
 
@@ -158,11 +158,6 @@ func (parser *Parser) parseStatementNoSemicolon() Statement {
 		st = parser.parseSwitch()
 	case ForKeyword:
 		st = parser.parseLoop()
-	/*
-		case DeferKeyword:
-			parser.eatLastToken()
-			st = parser.parseDefer()
-	*/
 	case LeftCurlyBrace:
 		st = parser.parseBlock()
 	case ReturnKeyword:
@@ -226,11 +221,6 @@ func (parser *Parser) parseStatement() Statement {
 		return parser.parseSwitch()
 	case ForKeyword:
 		return parser.parseLoop()
-	/*
-		case DeferKeyword:
-			parser.eatLastToken()
-			st = parser.parseDefer()
-	*/
 	case LeftCurlyBrace:
 		return parser.parseBlock()
 	case FunctionKeyword:
@@ -372,7 +362,7 @@ func (parser *Parser) parseImport() Import {
 		imprt.Paths = append(imprt.Paths, token)
 		parser.eatLastToken()
 	} else {
-		// Error: expected string literal, got {token]
+		// Error: expected string literal, got {token}
 	}
 
 	return imprt

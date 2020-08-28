@@ -605,28 +605,28 @@ func (lexer *Lexer) lexDelimiter() Token {
 	switch character, _ := lexer.peek(); character {
 	case '(':
 		lexer.eatLastByte()
-		return Token{PrimaryType: LeftParen, SecondaryType: SecondaryNullType, Buff: nil, Line: line, Column: column}
+		return Token{Buff: []byte("("), PrimaryType: LeftParen, SecondaryType: SecondaryNullType, Line: line, Column: column}
 	case ')':
 		lexer.eatLastByte()
-		return Token{PrimaryType: RightParen, SecondaryType: SecondaryNullType, Buff: nil, Line: line, Column: column}
+		return Token{Buff: []byte(")"), PrimaryType: RightParen, SecondaryType: SecondaryNullType, Line: line, Column: column}
 	case '{':
 		lexer.eatLastByte()
-		return Token{PrimaryType: LeftCurlyBrace, SecondaryType: SecondaryNullType, Buff: nil, Line: line, Column: column}
+		return Token{Buff: []byte("{"), PrimaryType: LeftCurlyBrace, SecondaryType: SecondaryNullType, Line: line, Column: column}
 	case '}':
 		lexer.eatLastByte()
-		return Token{PrimaryType: RightCurlyBrace, SecondaryType: SecondaryNullType, Buff: nil, Line: line, Column: column}
+		return Token{Buff: []byte("}"), PrimaryType: RightCurlyBrace, SecondaryType: SecondaryNullType, Line: line, Column: column}
 	case '[':
 		lexer.eatLastByte()
-		return Token{PrimaryType: LeftBrace, SecondaryType: SecondaryNullType, Buff: nil, Line: line, Column: column}
+		return Token{Buff: []byte("["), PrimaryType: LeftBrace, SecondaryType: SecondaryNullType, Line: line, Column: column}
 	case ']':
 		lexer.eatLastByte()
-		return Token{PrimaryType: RightBrace, SecondaryType: SecondaryNullType, Buff: nil, Line: line, Column: column}
+		return Token{Buff: []byte("]"), PrimaryType: RightBrace, SecondaryType: SecondaryNullType, Line: line, Column: column}
 	case ';':
 		lexer.eatLastByte()
-		return Token{PrimaryType: SemiColon, SecondaryType: SecondaryNullType, Buff: nil, Line: line, Column: column}
+		return Token{Buff: []byte(";"), PrimaryType: SemiColon, SecondaryType: SecondaryNullType, Line: line, Column: column}
 	case ',':
 		lexer.eatLastByte()
-		return Token{PrimaryType: Comma, SecondaryType: SecondaryNullType, Buff: nil, Line: line, Column: column}
+		return Token{Buff: []byte(","), PrimaryType: Comma, SecondaryType: SecondaryNullType, Line: line, Column: column}
 	}
 
 	return Token{PrimaryType: ErrorToken, SecondaryType: NotFound, Buff: nil, Line: line, Column: column}

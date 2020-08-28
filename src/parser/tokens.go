@@ -1,7 +1,5 @@
 package parser
 
-import "strconv"
-
 // PrimaryTokenType enum
 type PrimaryTokenType byte
 
@@ -188,59 +186,67 @@ type Token struct {
 	Flags         int
 }
 
-// --------------------------------------------
-// --------------------------------------------
-// ---------------- Debug Info ----------------
-// --------------------------------------------
-// --------------------------------------------
-
-// PrimaryTypes map with debug info for PrimaryTokenType
 var PrimaryTypes map[PrimaryTokenType]string = map[PrimaryTokenType]string{
 	PrimaryNullType: "Null",
 
-	Identifier: "Identifier",
+	Identifier: "identifier",
 
-	NumberLiteral: "NumberLiteral",
-	StringLiteral: "StringLiteral",
-	CharLiteral:   "CharLiteral",
+	NumberLiteral: "number literal",
+	StringLiteral: "string literal",
+	CharLiteral:   "char literal",
 
-	StringDelimiter: "StringDelimiter",
-	CharDelimiter:   "CharDelimiter",
+	StringDelimiter: "\"",
+	CharDelimiter:   "'",
 
-	LeftParen:       "LeftParen",
-	RightParen:      "RightParen",
-	LeftBrace:       "LeftBrace",
-	RightBrace:      "RightBrace",
-	LeftCurlyBrace:  "LeftCurlyBrace",
-	RightCurlyBrace: "RightCurlyBrace",
-	SemiColon:       "SemiColon",
-	Comma:           "Comma",
+	LeftParen:       "(",
+	RightParen:      ")",
+	LeftBrace:       "[",
+	RightBrace:      "]",
+	LeftCurlyBrace:  "{",
+	RightCurlyBrace: "}",
+	SemiColon:       ";",
+	Comma:           ",",
 
-	AirthmaticOperator: "AirthmaticOperator",
-	AssignmentOperator: "AssignmentOperator",
-	RelationalOperator: "RelationalOperator",
-	LogicalOperator:    "LogicalOperator",
-	BitwiseOperator:    "BitwiseOperator",
-	SpecialOperator:    "SpecialOperator",
+	AirthmaticOperator: "airthmatic operator",
+	AssignmentOperator: "assignment operator",
+	RelationalOperator: "relational operator",
+	LogicalOperator:    "logical operator",
+	BitwiseOperator:    "bitwise operator",
+	SpecialOperator:    "special operator",
 
-	ForKeyword:      "ForKeyword",
-	SwitchKeyword:   "SwitchKeyword",
-	IfKeyword:       "IfKeyword",
-	ElseKeyword:     "ElseKeyword",
-	FunctionKeyword: "FunctionKeyword",
-	StructKeyword:   "StructKeyword",
-	TupleKeyword:    "TupleKeyword",
-	EnumKeyword:     "EnumKeyword",
-	CaseKeyword:     "CaseKeyword",
-	AsyncKeyword:    "AsyncKeyword",
-	WorkKeyword:     "WorkKeyword",
-	ImportKeyword:   "ImportKeyowrd",
+	ForKeyword:      "for",
+	SwitchKeyword:   "switch",
+	IfKeyword:       "if",
+	ElseKeyword:     "else",
+	FunctionKeyword: "func",
+	StructKeyword:   "struct",
+	TupleKeyword:    "tuple",
+	EnumKeyword:     "enum",
+	CaseKeyword:     "case",
+	AsyncKeyword:    "async",
+	WorkKeyword:     "work",
+	ImportKeyword:   "import",
+	ReturnKeyword:   "return",
+	DefaultKeyword:  "default",
+	BreakKeyword:    "break",
+	ContinueKeyword: "constinue",
+	NewKeyword:      "new",
+	ConstKeyword:    "const",
+	VecKeyword:      "vec",
+	DeleteKeyword:   "delete",
+	TypedefKeyword:  "typedef",
+	CastKeyword:     "cast",
+	SizeKeyword:     "sizeof",
+	ExportKeyword:   "export",
+	UnionKeyword:    "union",
+	StaticKeyword:   "static",
+	CaptureKeyword:  "capture",
+	PromiseKeyword:  "promise",
 
 	EOF:        "EOF",
 	ErrorToken: "ErrorToken",
 }
 
-// SecondaryTypes map with debug info for SecondaryTokenType
 var SecondaryTypes map[SecondaryTokenType]string = map[SecondaryTokenType]string{
 	SecondaryNullType: "Null",
 
@@ -249,43 +255,43 @@ var SecondaryTypes map[SecondaryTokenType]string = map[SecondaryTokenType]string
 	OctalRadix:       "OctalRadix",
 	HexadecimalRadix: "HexadecimalRadix",
 
-	Add:     "Add",
-	Sub:     "Sub",
-	Mul:     "Mul",
-	Div:     "Div",
-	Modulus: "Modulus",
+	Add:     "+",
+	Sub:     "-",
+	Mul:     "*",
+	Div:     "/",
+	Modulus: "%",
 
-	AddEqual:     "AddEqual",
-	SubEqual:     "SubEqual",
-	MulEqual:     "MulEqual",
-	DivEqual:     "DivEqual",
-	ModulusEqual: "ModulusEqual",
-	Equal:        "Equal",
+	AddEqual:     "+=",
+	SubEqual:     "-=",
+	MulEqual:     "*=",
+	DivEqual:     "/=",
+	ModulusEqual: "%=",
+	Equal:        "=",
 
-	AddAdd: "AddAdd",
-	SubSub: "SubSub",
+	AddAdd: "++",
+	SubSub: "--",
 
-	EqualEqual:   "EqualEqual",
-	NotEqual:     "NotEqual",
-	Greater:      "Greater",
-	Less:         "Less",
-	LessEqual:    "LessEqual",
-	GreaterEqual: "GreaterEqual",
+	EqualEqual:   "==",
+	NotEqual:     "!=",
+	Greater:      ">",
+	Less:         "<",
+	LessEqual:    "<=",
+	GreaterEqual: ">=",
 
-	AndAnd: "AndAnd",
-	OrOr:   "OrOr",
-	Not:    "Not",
+	AndAnd: "&&",
+	OrOr:   "||",
+	Not:    "!",
 
-	LeftShift:   "LeftShift",
-	RightShift:  "RightShift",
-	Or:          "Or",
-	And:         "And",
-	ExclusiveOr: "ExclusiveOr",
+	LeftShift:   "<<",
+	RightShift:  ">>",
+	Or:          "|",
+	And:         "&",
+	ExclusiveOr: "^",
 
-	Colon:    "Colon",
-	QuesMark: "QuesMark",
-	Dot:      "Dot",
-	DotDot:   "DotDot",
+	Colon:    ":",
+	QuesMark: "?",
+	Dot:      ".",
+	DotDot:   "..",
 
 	Byte1Char: "Byte1Char",
 	Byte2Char: "Byte2Char",
@@ -299,5 +305,6 @@ var SecondaryTypes map[SecondaryTokenType]string = map[SecondaryTokenType]string
 
 // Serialize serializes a token
 func (token Token) Serialize() string {
-	return "{\n\tPrimaryType:\t" + PrimaryTypes[token.PrimaryType] + ",\n\tSecondaryType:\t" + SecondaryTypes[token.SecondaryType] + ",\n\tValue:\t" + string(token.Buff) + "\n\tLine:\t" + strconv.Itoa(token.Line) + "\n\tColumn:\t" + strconv.Itoa(token.Column) + "\n},"
+	return string(token.Buff)
+	// return "{\n\tPrimaryType:\t" + PrimaryTypes[token.PrimaryType] + ",\n\tSecondaryType:\t" + SecondaryTypes[token.SecondaryType] + ",\n\tValue:\t" + string(token.Buff) + "\n\tLine:\t" + strconv.Itoa(token.Line) + "\n\tColumn:\t" + strconv.Itoa(token.Column) + "\n},"
 }

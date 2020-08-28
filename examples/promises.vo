@@ -9,7 +9,7 @@ func main() i32 {
     });
 
     io.println("hehe");
-    prom.resolve("haha");
+    prom.resolve("haha")
 
     return 0;
 }
