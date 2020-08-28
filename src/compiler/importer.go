@@ -56,7 +56,11 @@ func ImportFile(dir string, base string, isMain bool, num2 int) *SymbolTable {
 		error.NewGenError("error finding import: " + err.Error())
 	}
 
-	os.MkdirAll(Path.Dir(OutPath), os.ModeDir)
+	buildDir := Path.Dir(OutPath)
+
+	os.MkdirAll(buildDir, os.ModeDir)
+	os.Chmod(buildDir, 0777)
+
 	f, err := os.Create(OutPath)
 
 	if err != nil {
@@ -66,7 +70,7 @@ func ImportFile(dir string, base string, isMain bool, num2 int) *SymbolTable {
 	if Path.Ext(path) == ".h" {
 		f.Write(Code)
 	} else {
-		ast := ParseFile(&Lexer{Buffer: Code, Line: 1, Column: 1})
+		ast := ParseFile(&Lexer{Buffer: Code, Line: 1, Column: 1, Path: path})
 		symbols, imports, prefixes, exports, numm := AnalyzeFile(ast, path)
 		newAst := FormatFile(ast, symbols, imports, prefixes, numm)
 

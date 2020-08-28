@@ -12,7 +12,7 @@
             "mode": "debug",
             "cwd": ".",
             "program": "${workspaceFolder}/src",
-            "args": ["compile", "../../test/examples/heapmemory.vo"],
+            "args": ["compile", "../examples/promises.vo"],
             "dlvLoadConfig": {
                 "followPointers": true,
                 "maxVariableRecurse": 1,

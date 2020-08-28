@@ -14,6 +14,8 @@ type Lexer struct {
 	// for error messages and all
 	Line   int // line count of the current char in code
 	Column int // column count of the current char in the current line
+
+	Path string // path of current file
 }
 
 func (lexer *Lexer) readToBuffer() byte {

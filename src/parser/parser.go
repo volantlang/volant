@@ -31,6 +31,10 @@ func (parser *Parser) pos() (int, int) {
 	return parser.Lexer.Line, parser.Lexer.Column
 }
 
+func (parser *Parser) error(message string, line, column int) {
+	error.New(parser.Lexer.Path+": "+message, line, column)
+}
+
 func (parser *Parser) ReadToken() Token {
 	for parser.position >= len(parser.tokens) {
 		parser.tokens = append(parser.tokens, parser.Lexer.NextToken())
@@ -55,15 +59,15 @@ func (parser *Parser) expect(primary PrimaryTokenType, secondary SecondaryTokenT
 
 	if primary == PrimaryNullType {
 		if token.SecondaryType != secondary {
-			error.New("expected '"+SecondaryTypes[secondary]+"', got '"+token.Serialize()+"'.", token.Line, token.Column)
+			parser.error("expected '"+SecondaryTypes[secondary]+"', got '"+token.Serialize()+"'.", token.Line, token.Column)
 		}
 	} else if secondary == SecondaryNullType {
 		if token.PrimaryType != primary {
-			error.New("expected '"+PrimaryTypes[primary]+"', got '"+token.Serialize()+"'.", token.Line, token.Column)
+			parser.error("expected '"+PrimaryTypes[primary]+"', got '"+token.Serialize()+"'.", token.Line, token.Column)
 		}
 	} else {
 		if token.PrimaryType != primary || token.SecondaryType != secondary {
-			error.New("expected '"+SecondaryTypes[secondary]+"', got '"+token.Serialize()+"'.", token.Line, token.Column)
+			parser.error("expected '"+SecondaryTypes[secondary]+"', got '"+token.Serialize()+"'.", token.Line, token.Column)
 		}
 	}
 
@@ -920,7 +924,7 @@ func (parser *Parser) parseDeclarationOrAssignment() Statement {
 		return parser.parseDeclaration()
 	}
 
-	error.New("Unexpected token {token}, expected assignment orperator or colon, got {token}", token.Line, token.Column)
+	parser.error("Unexpected token {token}, expected assignment orperator or colon, got {token}", token.Line, token.Column)
 	return Declaration{}
 }
 
