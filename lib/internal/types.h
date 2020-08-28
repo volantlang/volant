@@ -19,4 +19,6 @@ typedef double f64;
 typedef uintptr_t uptr;
 typedef u8 bool;
 
+void *null = NULL;
+
 #endif

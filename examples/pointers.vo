@@ -1,0 +1,10 @@
+func main() i32 {
+    i: i32 = 0;
+    ptr := &i;
+    
+    $printf("ptr is %zu, i is %i.\n", cast(uptr)ptr, *ptr); // uptr is an unsigned integer type large enough to hold a memory address
+    $printf("*(ptr + 1) is %i.\n", *(ptr+1)); // unsafe pointer maths is totally allowed
+    // see heapmemory.vo for more on pointers
+    
+    return 0;
+}

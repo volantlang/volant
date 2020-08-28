@@ -1,0 +1,6 @@
+import "io.vo";
+
+func main() i32 {
+    io.println("Hello World!");
+    return 0; // exit process with code 0
+}

@@ -1,0 +1,16 @@
+union Union {
+    x: i32;
+    y: [4]u8;
+};
+
+func main() i32 {
+    u: Union;
+    u.x = 10;
+
+    $printf("u.x is %i\n", u.x);
+
+    for i: size_t = 0; i < sizeof(u.y); ++i { // the sizeof operator returns the size, not length. Its only in this case that the size and length of array are the same
+        $printf("u.y[%i] is %i.\n", i, u.y[i]);
+    }
+    return 0;
+}

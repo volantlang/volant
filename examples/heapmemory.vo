@@ -1,0 +1,27 @@
+import "heap.vo"
+import "mem.vo"
+
+func main() i32 {
+    ptr := cast(*i32)heap.malloc(sizeof(i32)*100); // allocate 100 bytes to heap and return pointer to the first element
+
+    for i: size_t = 0; i < 100; ++i {
+        $printf("%i ", *(ptr+i)); // elements aren't initialized yet
+    }
+    $printf("\n\n");
+
+    mem.set(ptr, 0, sizeof(i32)*100); // initialize ptr with all zeros
+
+    *(ptr+10) = 100;
+
+    for i := 0; i < 100; ++i {
+        $printf("%i ", *(ptr+i));
+    }
+    $printf("\n");
+    heap.free(ptr); // freeing memory is optional since the language has a gc
+
+    ptr2 := new [10]i32{0, 0, 0, 0, 0, 0, 0, 0, 0, 0}; // allocate and initialize in same expression
+    // do stuff with ptr2
+    delete ptr2; // same as heap.free(ptr2)
+
+    return 0;
+}

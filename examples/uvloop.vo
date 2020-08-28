@@ -1,0 +1,42 @@
+import "uv/uv.vo";
+
+cb := func (timer: *uv.Timer) {
+    data := cast(*i32)timer.getData();
+    a: static i32 = 0;
+    $printf("hehehehehhehe %i %i\n", a++, *data);
+};
+
+// the lang will provide in-built support for these functions soon
+setTimeout := func (timeout: u64, callback: func(*uv.Timer), data: *void) *uv.Timer {
+    timer := new uv.Timer{};
+    timer.init(uv.getDefaultLoop());
+    timer.setData(data);
+    timer.start(callback, timeout, 0);
+    return timer;
+};
+
+setInterval := func (interval: u64, callback: func(*uv.Timer), data: *void) *uv.Timer {
+    timer := new uv.Timer{};
+    timer.init(uv.getDefaultLoop());
+    timer.setData(data);
+    timer.start(callback, interval, interval);
+    return timer;
+};
+
+func main() i32 {
+    loop := uv.getDefaultLoop();
+    
+    x := new u8(100);
+
+    setTimeout(1000, func (timer: *uv.Timer) {
+        $printf("x is %u\n", *x);
+    }, null);
+
+    setInterval(100, cb, cast(*void)x);
+    
+    // this will be handled internally by the lang in future
+    for r: i32 = 1; r != 0 {
+        r = loop.run(uv.RunMode.Default);
+    }
+    return 0;
+};

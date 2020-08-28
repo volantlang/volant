@@ -1,0 +1,22 @@
+
+func main() i32 {
+    vector1: vec u32; // create an uninitialized vector
+    vector1 = (vec u32){}; // initilize with an empty vector
+    // or implicty declare and initialize `vector1 := (vec u32){};`
+
+    $printf("Length: %zu, Capacity: %zu.\n", vector1.length, vector1.capacity); // initial capacity is 8
+
+    vector1.push(100); // vector -> {100}
+    vector1.concat((vec u32){50}); // vector -> {100, 50}
+
+    $printf("Length: %zu, Capacity: %zu.\n", vector1.length, vector1.capacity);
+    $printf("vector1[0] is %u\n", vector1[0]);
+    $printf("vector1[1] is %u\n", vector1[1]);
+
+    vector2 := vector1.clone();
+    vector2[0] = 99; 
+
+    $printf("vector1[0] is %u\n", vector1[0]);
+    $printf("vector2[0] is %u\n", vector2[0]);
+    return 0;
+}

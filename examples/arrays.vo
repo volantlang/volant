@@ -1,0 +1,37 @@
+import "mem.vo"
+
+func main() i32 {
+    array: [5]i32; // allocate 10*sizeof(i32) on stack, allocated memory is not initialized
+
+    for i: size_t = 0; i < 5; ++i {
+        $printf("array[%i] = %i.\n", i, array[i]);
+    }
+    $printf("\n");
+
+    // initialize with mem.set
+    mem.set(cast(*void)array, 0, sizeof(array));
+
+    for i: size_t = 0; i < 5; ++i {
+        $printf("array[%zu] = %i\n", i, array[i]);
+    }
+    $printf("\n");
+
+    // initialize with array initializers
+    array2: [5]i32 = {0, 1, 2, 3, 4};
+
+    for i: size_t = 0; i < 5; ++i {
+        $printf("array[%zu] = %i\n", i, array2[i]);
+    }
+    $printf("\n");
+
+    // allocate and initialize with compound literals
+    array3 := ([5]i32){4, 3, 2, 1, 0};
+
+    for i: size_t = 0; i < 5; ++i {
+        $printf("array3[%zu] = %i\n", i, array3[i]);
+    }
+    $printf("\n");
+
+    // see heapmemory.vo for heap arrays and vectors.vo for vectors
+    return 0;
+}

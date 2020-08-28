@@ -1,0 +1,34 @@
+struct TestStruct {
+    a: i8;
+    b: i8 = 100; // give default values
+    func c(self: *TestStruct) i8 {
+        return self.b++;
+    }
+};
+
+struct TestStruct2 {
+    ..TestStruct; // TestStruct2 inherits all properties and methods of TestStruct1
+    d: u32 = 30;
+};
+
+func main() i32 {
+    struct1 := (TestStruct){}; // struct1.b is automatically given value 100 and struct1.a is not initialized
+    
+    $printf("struct1.a = %i, struct1.b = %i.\n", struct1.a, struct1.b);
+    $printf("Size of struct1 is %zu.\n", sizeof(struct1)); // struct methods do not take any space in structs
+
+    for i := 0; i < 10; ++i {
+        $printf("struct1.b = %i.\n", struct1.c());
+    }
+    
+    $printf("\n");
+
+    struct2 := (TestStruct2){};
+    $printf("struct2.a = %i, struct2.b = %i, struct2.d = %i.\n", struct2.a, struct2.b, struct2.d);
+    $printf("Size of struct2 is %zu.\n", sizeof(struct2)); // this is most likely print 8 instead of 6 because of alignment optimisation
+
+    for i := 0; i < 10; ++i {
+        $printf("struct2.b = %i.\n", struct2.c());
+    }
+    return 0;
+}

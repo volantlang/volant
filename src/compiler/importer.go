@@ -32,13 +32,13 @@ func ImportFile(dir string, base string, isMain bool, num2 int) *SymbolTable {
 	}
 
 	path := Path.Join(dir, base)
-	rel, err := Path.Rel(ProjectDir, dir)
-	OutPath := Path.Join(ProjectDir, "_build")
+	rel, err := Path.Rel(ProjectDir, path)
 
-	if err == nil {
-		OutPath = Path.Join(OutPath, rel)
+	if err != nil {
+		rel, _ = Path.Rel(libPath, path)
 	}
-	OutPath = Path.Join(OutPath, Path.Dir(base), n2+Path.Base(base))
+
+	OutPath := Path.Join(ProjectDir, "_build", Path.Dir(rel), n2+Path.Base(base))
 
 	if isMain {
 		OutPath += ".c"

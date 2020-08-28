@@ -1,0 +1,21 @@
+import "callback.vo"
+
+func test() func() i32 {
+    i: capture i32 = 0; // capture tells the compiler that to keep this variable in memory even after the funtion returns
+    
+    return callback.copy(func () i32 { // callback.copy shifts the function declared locally to heap so that it can be used even after the funtion returns
+        return i++;
+    });
+};
+
+func main() i32 {
+    function := test();
+
+    for i := 0; i < 100; ++i {
+        $printf("%i ", function()); // printf cuz there isn't a number to string api in the language yet
+    }
+    callback.free(function); // free the allocated function (its optional because the langauge has a gc too)
+    
+    $printf("\n");
+    return 0;
+}
