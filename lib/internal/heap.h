@@ -1,4 +1,6 @@
 #ifndef VO_INTERNAL_HEAP
+#define VO_INTERNAL_HEAP
+
 #include "gc.h"
 
 #define malloc(size) GC_malloc(size)
