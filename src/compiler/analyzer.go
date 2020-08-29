@@ -196,7 +196,11 @@ func (s *SemanticAnalyzer) declaration(dec Declaration) {
 
 			switch Typ.(type) {
 			case NumberType:
-				Typ = I32Type.Type
+				if bytes.Contains(val.(BasicLit).Value.Buff, []byte(".")) {
+					Typ = F32Type
+				} else {
+					Typ = I32Type.Type
+				}
 			}
 			Types = append(Types, Typ)
 		}
