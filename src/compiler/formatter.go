@@ -1231,6 +1231,14 @@ func (f *Formatter) compareTypes(Type1 Type, Type2 Type) bool {
 			return f.compareTypes(Type1.(StaticType).BaseType, Type2.(StaticType).BaseType)
 		}
 		return f.compareTypes(Type1, Type2.(StaticType).BaseType)
+	case ConstType:
+		switch Type1.(type) {
+		case ConstType:
+			break
+		default:
+			return f.compareTypes(Type1, Type2.(ConstType).BaseType)
+		}
+		return f.compareTypes(Type1.(ConstType).BaseType, Type2.(ConstType).BaseType)
 	}
 
 	switch Type1.(type) {
@@ -1316,7 +1324,7 @@ func (f *Formatter) compareTypes(Type1 Type, Type2 Type) bool {
 		case ConstType:
 			break
 		default:
-			return false
+			return f.compareTypes(Type1.(ConstType).BaseType, Type2)
 		}
 		return f.compareTypes(Type1.(ConstType).BaseType, Type2.(ConstType).BaseType)
 	case FuncType:
