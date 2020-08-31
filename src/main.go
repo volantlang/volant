@@ -36,6 +36,7 @@ func main() {
 
 		if err != nil {
 			fmt.Println(string(out))
+			os.Exit(1)
 		}
 	}
 }
