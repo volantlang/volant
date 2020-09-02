@@ -32,8 +32,8 @@ func main() {
 
 		ImportFile(path.Dir(file), path.Base(file), true, 0)
 
-		out, err := exec.Command("clang", path.Join(path.Dir(file), "_build", "0"+path.Base(file)+".c"), "-pthread", "-luv", "-fblocks", "-lBlocksRuntime", "-lgc", "-I"+libPath, *clang, "-o", path.Join(path.Dir(file), "a.out")).CombinedOutput()
-
+		out, err := exec.Command("/bin/bash", "-c", "clang " + path.Join(path.Dir(file), "_build", "0"+path.Base(file)+".c") + " -pthread " + "-luv" + " -fblocks " + " -lBlocksRuntime " + " -lgc " + " -I" + libPath + " " + *clang + " -o " + path.Join(path.Dir(file), "a.out")).CombinedOutput()
+		
 		if err != nil {
 			fmt.Println(string(out))
 			os.Exit(1)
