@@ -13,22 +13,49 @@ var exPath, _ = os.Executable()
 var libPath = path.Join(path.Dir(exPath), "../lib")
 var defaultH = path.Join(libPath, "internal/default.h")
 
+func subcommands() { // Helper function
+	fmt.Println("  compile string")
+	fmt.Println("    compile a file")
+	fmt.Println("Valid flags are:")
+}
+
 func main() {
+	compile := flag.NewFlagSet("compile", flag.ExitOnError)
+	clang := flag.String("clang", "", "pass arguments to clang")
+
 	if len(os.Args) < 2 {
-		fmt.Println("no arguments given")
+		fmt.Println("\x1b[31mError: a subcommand is required\x1b[0m")
+		fmt.Println("Valid subcommands are:")
+		subcommands()
+		flag.PrintDefaults()
 		os.Exit(1)
 	}
+
 	switch os.Args[1] {
 	case "compile":
-		if len(os.Args) < 3 {
-			fmt.Println("file name not given")
+		compile.Parse(os.Args[2:])
+	default:
+		fmt.Println("\x1b[31mError: invalid subcommand\x1b[0m")
+		subcommands()
+		fmt.Println("Valid flags are:")
+		flag.PrintDefaults()
+		os.Exit(1)
+	}
+
+	if compile.Parsed() {
+		file := compile.Arg(0)
+
+		if file == "" {
+			fmt.Println("\x1b[31mError: a file is required for `compile`\x1b[0m")
+			os.Exit(1)
 		}
 
-		cmd := flag.NewFlagSet("compile", flag.ExitOnError)
-		clang := cmd.String("clang", "", "pass arguments to the clang compiler")
+		file = path.Clean(file)
 
-		file := path.Clean(os.Args[2])
-		cmd.Parse(os.Args[3:])
+		if _, err := os.Stat(file); os.IsNotExist(err) {
+			fmt.Println(fmt.Sprintf("\x1b[31mError: file `%s` does not exist\x1b[0m", file))
+			os.Exit(1)
+		}
 
 		ImportFile(path.Dir(file), path.Base(file), true, 0)
 
