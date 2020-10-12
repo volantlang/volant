@@ -1,0 +1,114 @@
+import "io.vo";
+import "num.vo";
+import "mem.vo";
+import "string.vo";
+import "vector.vo";
+
+dotDotSlash := (string.String){mem: "../", length: 3};
+dotSlash := (string.String){mem: "./", length: 2};
+
+dotDot := (string.String){mem: "..", length: 2};
+
+func print(str: string.String) {
+    len: [10]u8;
+    num.utos(str.length, len);
+    io.print("Length: ");
+    io.print(len);
+    io.print(" Buff: ");
+    io.println(str.raw());
+};
+
+export func normalizeVec(pathsv: *void) *void {
+    paths := cast(vec string.String)pathsv; 
+    last := (vec string.String){};
+    curr: string.String;
+    
+    for i: size_t = 0; i < paths.length; ++i {
+        curr = paths[i];
+        if curr.compare(dotDot) && last.length > 0 {
+            last.pop();
+        } else if !(curr.length == 1 && curr.get(0) == '.') && curr.length != 1 {
+            last.push(curr);
+        }
+    }
+    
+    paths.free();
+    return cast(*void)last;
+};
+
+export func normalize(path: string.String) string.String {
+    p := path.split('/');
+    x := cast(vec string.String)normalizeVec(p);
+    y := string.join(x, '/');
+
+    p.free();
+    x.free();
+    
+    return y;
+};
+
+export func join(pathsv: *void) string.String {
+    paths := cast(vec string.String)pathsv;
+    path := string.from("", 0);
+    
+    last := (vec string.String){};
+    curr: string.String;
+    
+    for i: size_t = 0; i < paths.length; ++i {
+        curr = paths[i];
+        for {
+            if curr.get(0) == '/' {
+                curr = curr.slice(1, curr.length);
+            } else if curr.startsWith(dotDotSlash) {
+                last.pop();
+                curr = curr.slice(3, curr.length);
+            } else if curr.startsWith(dotSlash) {
+                curr = curr.slice(2, curr.length);
+            } else {
+                break;
+            }
+        }
+        if curr.length == 0 {
+            continue;
+        }
+        if curr.get(curr.length-1) == '/' {
+            curr = curr.slice(0, curr.length-1);
+        }
+        t := curr.split('/');
+        last.concat(t);
+        t.free();
+    }
+    path = string.join(last, '/');
+    last.free();
+
+    return path;
+};
+
+export func relative(from: string.String, to: string.String) string.String {
+    if to.get(0) == '/' {
+        return normalize(to);
+    }
+    a, b, c := from.split('/'), to.split('/'), (vec string.String){};
+         
+    for i: size_t = 0; i < b.length; ++i {
+        if b[i].compare(dotDot) {
+            a.pop();
+        } else if a.length == 0 || !b[i].compare(a[a.length - 1]) {
+            break;
+        } else {
+            c.push(b[i]);
+        }
+    }
+    x := a.concat(c);
+    a.free();
+    b.free();
+    c.free();
+
+    y := cast(vec string.String)normalizeVec(x);
+    x.free();
+    
+    z := string.join(y, '/');
+    y.free();
+
+    return z;
+};

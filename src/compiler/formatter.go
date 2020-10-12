@@ -70,6 +70,10 @@ func (f *Formatter) statement(stmt Statement) Statement {
 		return ExportStatement{Stmt: f.statement(stmt.(ExportStatement).Stmt)}
 	case Expression:
 		return f.expr(stmt.(Expression))
+	case Label:
+		return Label{Name: f.NameSp.getLabelName(stmt.(Label).Name)}
+	case Goto:
+		return Goto{Name: f.NameSp.getLabelName(stmt.(Goto).Name)}
 	}
 	return stmt
 }
@@ -108,12 +112,16 @@ func (f *Formatter) loop(loop Loop) Loop {
 }
 
 func (f *Formatter) swtch(swtch Switch) Switch {
-	newSwitch := Switch{Cases: make([]CaseStruct, len(swtch.Cases))}
+	newSwitch := Switch{Cases: make([]CaseStruct, len(swtch.Cases)), Type: swtch.Type}
 	f.pushScope()
-	if swtch.Type == 1 {
+
+	if swtch.Type == InitCondSwitch {
 		newSwitch.InitStatement = f.statement(swtch.InitStatement)
 		newSwitch.Expr = f.expr(swtch.Expr)
+	} else if swtch.Type == CondSwitch {
+		newSwitch.Expr = f.expr(swtch.Expr)
 	}
+
 	for x, Case := range swtch.Cases {
 		newSwitch.Cases[x].Condition = f.expr(Case.Condition)
 		newSwitch.Cases[x].Block = f.block(Case.Block)
@@ -123,17 +131,13 @@ func (f *Formatter) swtch(swtch Switch) Switch {
 		newSwitch.DefaultCase = f.block(swtch.DefaultCase)
 	}
 	f.popScope()
-	return swtch
+	return newSwitch
 }
 
 func (f *Formatter) imprt(stmt Import) Import {
 	imprt := Import{}
-	n := strconv.Itoa(f.NameSp.Num + 1)
-
 	for _, Path := range stmt.Paths {
 		pth := path.Clean(string(Path.Buff[1 : len(Path.Buff)-1]))
-		pth = path.Join(path.Dir(pth), n+path.Base(pth))
-
 		if path.Ext(pth) != ".h" {
 			pth += ".h"
 		}
@@ -159,7 +163,9 @@ func (f *Formatter) typedef(typedef Typedef) Typedef {
 
 	switch Typ.(type) {
 	case StructType:
+		f.pushScope()
 		Typ = f.strct(Typ.(StructType), typedef.Name)
+		f.popScope()
 		DefaultName = f.NameSp.getStrctDefaultName(typedef.Name)
 	case EnumType:
 		Typ = f.enum(Typ.(EnumType), typedef.Name)
@@ -216,7 +222,6 @@ func (f *Formatter) declaration(dec Declaration) Declaration {
 			newDec.Types = append(newDec.Types, f.typ(typ))
 		}
 	}
-
 	for _, Val := range dec.Values {
 		newDec.Values = append(newDec.Values, f.expr(Val))
 	}
@@ -249,10 +254,12 @@ func (f *Formatter) strctProp(prop Declaration, Name Token) Declaration {
 	for i, Ident := range prop.Identifiers {
 		switch newProp.Types[i].(type) {
 		case FuncType:
-			newProp.Identifiers = append(newProp.Identifiers, f.NameSp.getStrctMethodName(Ident, Name))
-		default:
-			newProp.Identifiers = append(newProp.Identifiers, f.NameSp.getPropName(Ident))
+			if !newProp.Types[i].(FuncType).Mut {
+				newProp.Identifiers = append(newProp.Identifiers, f.NameSp.getStrctMethodName(Ident, Name))
+				continue
+			}
 		}
+		newProp.Identifiers = append(newProp.Identifiers, f.NameSp.getPropName(Ident))
 	}
 	return newProp
 }
@@ -322,7 +329,11 @@ func (f *Formatter) superStrctProp(superSt BasicType, prop Declaration, Name Tok
 			newProp.Types = append(newProp.Types, f.typ(Type))
 		}
 	}
-
+	/*
+		for _, val := range prop.Values {
+			newProp.Values = append(newProp.Values, f.expr(val))
+		}
+	*/
 	for i, Ident := range prop.Identifiers {
 		switch newProp.Types[i].(type) {
 		case FuncType:
@@ -337,20 +348,39 @@ func (f *Formatter) superStrctProp(superSt BasicType, prop Declaration, Name Tok
 	return newProp
 }
 
-func (f *Formatter) strct(Typ StructType, Name Token) StructType {
-	f.pushScope()
+func (f *Formatter) superStrct(t BasicType, Typ StructType, Name Token) StructType {
 	strct := StructType{}
 	strct.Props = []Declaration{}
 
+	for _, superStruct := range Typ.SuperStructs {
+		l := f.getType(superStruct).(Typedef)
+		s := f.superStrct(BasicType{Expr: IdentExpr{Value: l.Name}}, l.Type.(StructType), Name)
+
+		for _, prop := range s.Props {
+			strct.Props = append(strct.Props, prop)
+		}
+	}
+	for _, prop := range Typ.Props {
+		strct.Props = append(strct.Props, f.superStrctProp(t, prop, Name))
+	}
+	return strct
+}
+
+func (f *Formatter) strct(Typ StructType, Name Token) StructType {
+	strct := StructType{}
+	strct.Props = []Declaration{}
+
+	for _, superStruct := range Typ.SuperStructs {
+		l := f.getType(superStruct).(Typedef)
+		s := f.superStrct(BasicType{Expr: IdentExpr{Value: l.Name}}, l.Type.(StructType), Name)
+
+		for _, prop := range s.Props {
+			strct.Props = append(strct.Props, prop)
+		}
+	}
 	for _, prop := range Typ.Props {
 		strct.Props = append(strct.Props, f.strctProp(prop, Name))
 	}
-	for _, superStruct := range Typ.SuperStructs {
-		for _, prop := range f.getType(superStruct).(Typedef).Type.(StructType).Props {
-			strct.Props = append(strct.Props, f.superStrctProp(BasicType{Expr: superStruct}, prop, Name))
-		}
-	}
-	f.popScope()
 	return strct
 }
 
@@ -389,6 +419,8 @@ func (f *Formatter) expr(expr Expression) Expression {
 		expr2 = f.sizeExpr(expr.(SizeExpr))
 	case CompoundLiteral:
 		expr2 = f.compoundLiteral(expr.(CompoundLiteral))
+	case AwaitExpr:
+		expr2 = AwaitExpr{Expr: f.expr(expr.(AwaitExpr).Expr)}
 	case FuncExpr:
 		f.pushScope()
 		expr2 = FuncExpr{Type: f.typ(expr.(FuncExpr).Type).(FuncType), Block: f.block(expr.(FuncExpr).Block)}
@@ -406,10 +438,14 @@ func (f *Formatter) callExpr(expr CallExpr) CallExpr {
 	isPointer := false
 	Typ := f.getRootType(f.getType(expr.Function))
 
-	switch Typ.(type) {
-	case PointerType:
-		Typ = f.getRootType(Typ.(PointerType).BaseType)
-		isPointer = true
+	for {
+		switch Typ.(type) {
+		case PointerType:
+			Typ = f.getRootType(Typ.(PointerType).BaseType)
+			isPointer = true
+			continue
+		}
+		break
 	}
 
 	switch expr.Function.(type) {
@@ -486,7 +522,7 @@ func (f *Formatter) typ(typ Type) Type {
 		for i, Typ := range ArgTypes {
 			NewArgTypes[i] = f.typ(Typ)
 		}
-		return FuncType{Type: typ.(FuncType).Type, ArgTypes: NewArgTypes, ArgNames: NewArgNames, ReturnTypes: f.typeArray(typ.(FuncType).ReturnTypes)}
+		return FuncType{Type: typ.(FuncType).Type, ArgTypes: NewArgTypes, ArgNames: NewArgNames, ReturnTypes: f.typeArray(typ.(FuncType).ReturnTypes), Mut: typ.(FuncType).Mut}
 	case TupleType:
 		return f.tupl(typ.(TupleType))
 	case UnionType:
@@ -589,46 +625,25 @@ func (f *Formatter) compoundLiteral(expr CompoundLiteral) CompoundLiteral {
 	data := f.compoundLiteralData(expr.Data)
 
 	if len(data.Fields) == 0 && len(data.Values) > 0 {
-		x := 0
+		x := 1
 		l := len(data.Values)
 
 		for _, prop := range strct.Props {
 			for j, Ident := range prop.Identifiers {
 				t := prop.Types[j]
+
 				switch t.(type) {
 				case FuncType:
 					if !t.(FuncType).Mut {
 						continue
 					}
 				}
-				data.Fields = append(data.Fields, f.NameSp.getPropName(Ident))
-				x++
-				if x <= l {
-					continue
-				}
-				data.Values = append(data.Values, MemberExpr{
-					Base: IdentExpr{Value: f.NameSp.getStrctDefaultNameFromPrefix(prefix, StrctName)},
-					Prop: f.NameSp.getPropName(Ident),
-				})
-			}
-		}
-		for _, superSt := range strct.SuperStructs {
-			superSt := f.getRootType(f.getType(superSt)).(StructType)
 
-			for _, prop := range superSt.Props {
-				for j, Ident := range prop.Identifiers {
-					t := prop.Types[j]
-					switch t.(type) {
-					case FuncType:
-						if !t.(FuncType).Mut {
-							continue
-						}
-					}
+				if x <= l {
 					data.Fields = append(data.Fields, f.NameSp.getPropName(Ident))
 					x++
-					if x <= l {
-						continue
-					}
+				} else if len(prop.Values) >= j || len(prop.Values) == 1 {
+					data.Fields = append(data.Fields, f.NameSp.getPropName(Ident))
 					data.Values = append(data.Values, MemberExpr{
 						Base: IdentExpr{Value: f.NameSp.getStrctDefaultNameFromPrefix(prefix, StrctName)},
 						Prop: f.NameSp.getPropName(Ident),
@@ -636,13 +651,48 @@ func (f *Formatter) compoundLiteral(expr CompoundLiteral) CompoundLiteral {
 				}
 			}
 		}
+		for _, superSt := range strct.SuperStructs {
+			superSt := f.getRootType(f.getType(superSt)).(StructType)
+
+			for _, prop := range superSt.Props {
+				for j, Ident := range prop.Identifiers {
+
+					t := prop.Types[j]
+
+					switch t.(type) {
+					case FuncType:
+						if !t.(FuncType).Mut {
+							continue
+						}
+					}
+
+					if x <= l {
+						data.Fields = append(data.Fields, f.NameSp.getPropName(Ident))
+						x++
+					} else if len(prop.Values) >= j || len(prop.Values) == 1 {
+						data.Fields = append(data.Fields, f.NameSp.getPropName(Ident))
+						data.Values = append(data.Values, MemberExpr{
+							Base: IdentExpr{Value: f.NameSp.getStrctDefaultNameFromPrefix(prefix, StrctName)},
+							Prop: f.NameSp.getPropName(Ident),
+						})
+					}
+				}
+			}
+		}
 	} else {
 		for _, prop := range strct.Props {
+		label:
 			for j, Ident := range prop.Identifiers {
-
-				if hasField(data.Fields, Ident) {
-					continue
+				if len(prop.Values) <= j && len(prop.Values) != 1 {
+					break
 				}
+
+				for _, tok := range data.Fields {
+					if bytes.Compare(f.NameSp.getActualName(tok).Buff, f.NameSp.getActualName(Ident).Buff) == 0 {
+						continue label
+					}
+				}
+
 				t := prop.Types[j]
 
 				switch t.(type) {
@@ -663,8 +713,20 @@ func (f *Formatter) compoundLiteral(expr CompoundLiteral) CompoundLiteral {
 			superSt := f.getRootType(f.getType(superSt)).(StructType)
 
 			for _, prop := range superSt.Props {
+			label2:
 				for j, Ident := range prop.Identifiers {
+					if len(prop.Values) <= j && len(prop.Values) != 1 {
+						break
+					}
+
+					for _, tok := range data.Fields {
+						if bytes.Compare(f.NameSp.getActualName(tok).Buff, f.NameSp.getActualName(Ident).Buff) == 0 {
+							continue label2
+						}
+					}
+
 					t := prop.Types[j]
+
 					switch t.(type) {
 					case FuncType:
 						if !t.(FuncType).Mut {
@@ -684,22 +746,13 @@ func (f *Formatter) compoundLiteral(expr CompoundLiteral) CompoundLiteral {
 	return CompoundLiteral{Name: Name, Data: data}
 }
 
-func hasField(fields []Token, field Token) bool {
-	for _, tok := range fields {
-		if bytes.Compare(tok.Buff, field.Buff) == 0 {
-			return true
-		}
-	}
-	return false
-}
-
 func (f *Formatter) compoundLiteralData(data CompoundLiteralData) CompoundLiteralData {
 	newData := CompoundLiteralData{Values: make([]Expression, len(data.Values)), Fields: make([]Token, len(data.Fields))}
 	for i, Val := range data.Values {
 		newData.Values[i] = f.expr(Val)
 	}
 	for i, Field := range data.Fields {
-		newData.Fields[i] = f.NameSp.getNewVarName(Field)
+		newData.Fields[i] = f.NameSp.getPropName(Field)
 	}
 	return newData
 }
@@ -776,6 +829,8 @@ func (f *Formatter) memberExpr(expr MemberExpr) Expression {
 			if ok {
 				return IdentExpr{Value: f.NameSp.joinName(val, f.NameSp.getActualName(expr.Prop))}
 			}
+		default:
+			return MemberExpr{Base: f.expr(expr.Base), Prop: expr.Prop}
 		}
 	}
 
@@ -785,6 +840,8 @@ func (f *Formatter) memberExpr(expr MemberExpr) Expression {
 	case PointerType:
 		Typ = Typ.(PointerType).BaseType
 		isPointer = true
+	case InternalType:
+		return MemberExpr{Base: f.expr(expr.Base), Prop: expr.Prop}
 	}
 
 	prefix := f.NameSp.Base
@@ -813,6 +870,11 @@ func (f *Formatter) memberExpr(expr MemberExpr) Expression {
 			prefix = string(f.Prefixes[key][1:])
 			table = f.Imports[key]
 		}
+	case InternalType:
+		if isPointer {
+			return PointerMemberExpr{Base: f.expr(expr.Base), Prop: expr.Prop}
+		}
+		return MemberExpr{Base: f.expr(expr.Base), Prop: expr.Prop}
 	}
 
 	switch Typ.(type) {
@@ -824,6 +886,11 @@ func (f *Formatter) memberExpr(expr MemberExpr) Expression {
 			}
 			return IdentExpr{Value: f.NameSp.getEnumProp(Typ.(Typedef).Name.Buff, expr.Prop)}
 		}
+	case InternalType:
+		if isPointer {
+			return PointerMemberExpr{Base: f.expr(expr.Base), Prop: expr.Prop}
+		}
+		return MemberExpr{Base: f.expr(expr.Base), Prop: expr.Prop}
 	}
 
 	Typ99 := f.getRootType(Typ)
@@ -836,6 +903,11 @@ func (f *Formatter) memberExpr(expr MemberExpr) Expression {
 		return f.getVecProp(expr)
 	case PromiseType:
 		return f.getPromiseProp(expr)
+	case InternalType:
+		if isPointer {
+			return PointerMemberExpr{Base: f.expr(expr.Base), Prop: expr.Prop}
+		}
+		return MemberExpr{Base: f.expr(expr.Base), Prop: expr.Prop}
 	default:
 		return MemberExpr{Base: f.expr(expr.Base), Prop: f.NameSp.getPropName(expr.Prop)}
 	}
@@ -857,14 +929,17 @@ func (f *Formatter) memberExpr(expr MemberExpr) Expression {
 			}
 		}
 
-		Typ11 = f.ofNamespace(f.getPropType(ident, Typ9), p2, table)
+		Typ11 = f.ofNamespace(f.getPropType(f.NameSp.getActualName(ident), Typ9), p2, table)
 	} else {
-		Typ11 = f.getPropType(ident, Typ2)
+		Typ11 = f.getPropType(f.NameSp.getActualName(ident), Typ2)
 	}
 
 	switch Typ11.(type) {
 	case FuncType:
-		return IdentExpr{Value: f.NameSp.getStrctMethodNameFromPrefix(prefix, ident, Typ.(Typedef).Name)}
+		if !Typ11.(FuncType).Mut {
+			// fmt.Println(string(Typ.(Typedef).Name.Buff))
+			return IdentExpr{Value: f.NameSp.getStrctMethodNameFromPrefix(prefix, ident, Typ.(Typedef).Name)}
+		}
 	}
 
 	if isPointer {
@@ -885,6 +960,11 @@ func (f *Formatter) getVecProp(expr MemberExpr) Expression {
 			Base: f.expr(expr.Base),
 			Prop: expr.Prop,
 		}
+	case "raw":
+		return PointerMemberExpr{
+			Base: f.expr(expr.Base),
+			Prop: Token{Buff: []byte("mem"), PrimaryType: Identifier},
+		}
 	case "push":
 		return IdentExpr{Value: Token{Buff: []byte("VECTOR_PUSH")}}
 	case "pop":
@@ -895,6 +975,10 @@ func (f *Formatter) getVecProp(expr MemberExpr) Expression {
 		return IdentExpr{Value: Token{Buff: []byte("VECTOR_FREE")}}
 	case "clone":
 		return IdentExpr{Value: Token{Buff: []byte("VECTOR_CLONE")}}
+	case "append":
+		return IdentExpr{Value: Token{Buff: []byte("VECTOR_APPEND")}}
+	case "slice":
+		return IdentExpr{Value: Token{Buff: []byte("VECTOR_SLICE")}}
 	}
 	return nil
 }
@@ -1015,6 +1099,8 @@ func (f *Formatter) getType(expr Expression) Type {
 		return expr.(CompoundLiteral).Name
 	case SizeExpr:
 		return BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("size_t"), PrimaryType: Identifier}}}
+	case AwaitExpr:
+		return f.getType(expr.(AwaitExpr).Expr).(PromiseType).BaseType
 	case MemberExpr:
 		Typ := f.getType(expr.(MemberExpr).Base)
 
@@ -1037,7 +1123,9 @@ func (f *Formatter) getType(expr Expression) Type {
 		case PointerType:
 			Typ = Typ.(PointerType).BaseType
 		case Typedef:
-			return Typ.(Typedef).Type
+			return BasicType{Expr: expr.(MemberExpr).Base}
+		case InternalType:
+			return InternalType{}
 		}
 
 		Typ7 := f.getRootType(Typ)
@@ -1054,6 +1142,8 @@ func (f *Formatter) getType(expr Expression) Type {
 				table = t
 				base = Typ7.(BasicType).Expr.(MemberExpr).Base
 			}
+		case InternalType:
+			return InternalType{}
 		}
 
 		switch Typ7.(type) {
@@ -1085,6 +1175,8 @@ func (f *Formatter) getType(expr Expression) Type {
 			return f.getVectorPropType(Typ.(VecType), expr.(MemberExpr).Prop)
 		case PromiseType:
 			return f.getPromisePropType(Typ.(PromiseType), expr.(MemberExpr).Prop)
+		case InternalType:
+			return InternalType{}
 		}
 	}
 
@@ -1145,6 +1237,18 @@ func (f *Formatter) getVectorPropType(vec VecType, prop Token) Type {
 			ReturnTypes: []Type{vec},
 			ArgTypes:    []Type{vec},
 		}
+	case "append":
+		return FuncType{
+			Type:        OrdFunction,
+			ReturnTypes: []Type{vec},
+			ArgTypes:    []Type{vec, PointerType{BaseType: vec.BaseType}, BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("size_t"), PrimaryType: Identifier}}}},
+		}
+	case "slice":
+		return FuncType{
+			Type:        OrdFunction,
+			ReturnTypes: []Type{vec},
+			ArgTypes:    []Type{vec, BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("size_t"), PrimaryType: Identifier}}}, BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("size_t"), PrimaryType: Identifier}}}},
+		}
 	case "length":
 		return BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("size_t"), PrimaryType: Identifier}}}
 	case "capacity":
@@ -1179,6 +1283,13 @@ func (f *Formatter) getRootType(typ Type) Type {
 
 	switch typ.(type) {
 	case BasicType:
+		switch typ.(BasicType).Expr.(type) {
+		case IdentExpr:
+			b := typ.(BasicType).Expr.(IdentExpr).Value.Buff
+			if b[0] == '$' {
+				return InternalType{}
+			}
+		}
 		Typ = f.getType(typ.(BasicType).Expr)
 	case Typedef:
 		break

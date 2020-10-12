@@ -1,39 +1,163 @@
-struct String {
-    mem: vec u8;
-    func concat(self: *String, str: String) {
-        self.mem.concat(str.mem);
-    };
-    func bytes(self: *String) *u8 {
-        return &self.mem[0];
-    };
-    func push(self: *String, char: u8) {
-        self.mem.push(char);
-    };
-    func pop(self: *String) u8 {
-        return self.mem.pop();
-    };
-    func clone(self: *String) *String {
-        str := new String;
-        str.mem = self.mem.clone();
-        return str;
-    };
-    func charAt(self: *String, index: size_t) u8 {
-        return self.mem[index];
-    };
-    func toLower(self: *String) {
-        for i := 0; i < self.mem.length; ++i {
-            
-        }
-    };
+import "io.vo";
+import "mem.vo";
+import "heap.vo";
+
+export func from(buff: *u8, length: size_t) String {
+    return (String){mem: buff, length: length};
 };
 
-export func work from(bytes: *u8) String {
-    str := (String){};
+export func alloc(length: size_t) String {
+    return (String){length: length, mem: heap.malloc(length * sizeof(u8))};
+};
 
-    c = bytes[0]
-    for i: size_t = 1; c != 0; ++i {
-        str.push(c);
-        c = bytes[c];
+export func join(strsv: *void, sep: u8) String {
+    strs := cast(vec String)strsv;
+    size := (strs.length-1);
+    for i := 0; i < strs.length; ++i {
+        size += strs[i].length;
+    }
+    str := alloc(size);
+    b := str.mem;
+    
+    st := strs[0];
+    mem.copy(b, st.mem, st.length);
+    b += st.length;
+
+    for i := 1; i < strs.length; ++i {
+        *(b++) = sep;
+        st = strs[i];
+        mem.copy(b, st.mem, st.length);
+        b += st.length;
     }
     return str;
-}
+};
+
+export func joinStr(strsv: *void, sep: String) String {
+    strs := cast(vec String)strsv;
+    m, l := sep.mem, sep.length;
+    size := (strs.length-1)*sep.length;
+    for i := 0; i < strs.length; ++i {
+        size += strs[i].length;
+    }
+    str := alloc(size);
+    s := 0;
+    for i := 0; i < strs.length; ++i {
+        st := strs[i];
+        mem.copy(str.mem+s, st.mem, st.length);
+        s += st.length;
+        mem.copy(str.mem+s, m, l);
+        s += l;
+    }
+    return str;
+};
+
+export struct String {
+    mem: *u8;
+    length: size_t;
+    func raw(self: *String) *u8 {
+        return self.mem;
+    };
+    func get(self: *String, index: size_t) u8 {
+        return self.mem[index];
+    };
+    func set(self: *String, index: size_t, value: u8) {
+        self.mem[index] = value;
+    };
+    func fill(self: *String, char: u8) {
+        mem.set(self.mem, char, self.length);
+    };
+    func compare(self: *String, str: String) i8 {
+        return self.length == str.length ? mem.compare(self.mem, str.mem, self.length) : (self.length > str.length ? 1 : -1);
+    };
+    func startsWith(self: *String, str: String) bool {
+        return self.length > str.length ? mem.compare(self.mem, str.mem, str.length) == 0 : false;
+    };
+    func endsWith(self: *String, str: String) bool {
+        return self.length > str.length ? mem.compare((self.mem + self.length) - str.length, str.mem, str.length) == 0 : false;
+    };
+    func clone(self: *String) String {
+        str := alloc(self.length);
+        mem.copy(str.mem, self.mem, self.length);
+        return str;
+    };
+    func slice(self: *String, start: size_t, end: size_t) String {
+        str := (String){};
+        str.mem = self.mem + start;
+        str.length = end - start;
+        return str;
+    };
+    func append(self: *String, char: u8) String {
+        l := self.length;
+        str := alloc(l+1);
+        mem.copy(str.mem, self.mem, l);
+        str.mem[l] = char;
+        return str;
+    };
+    func concat(str1: *String, str2: String) String {
+        length := str1.length + str2.length;
+        str := alloc(length);
+        mem.copy(str.mem, str1.mem, str1.length);
+        mem.copy(str.mem + str1.length, str2.mem, str2.length);
+        return str;
+    };
+    func repeat(self: *String, num: size_t) String {
+        oldlength := self.length;
+        length := num*oldlength;
+        str := alloc(length);
+        for i := 0; i < num; ++i {
+            mem.copy(str.mem + i*(oldlength), self.mem, oldlength);
+        }
+        return str;
+    };
+    func insert(self: *String, index: size_t, char: u8) String {
+        str := alloc(self.length+1);
+        str.mem[index] = char;
+        mem.copy(str.mem, self.mem, index);
+        mem.copy(str.mem + index + 1, self.mem + index, self.length - index);
+        return str;
+    };
+    func insertStr(self: *String, index: size_t, str2: String) String {
+        str := alloc(self.length+str2.length);
+        mem.copy(str.mem, self.mem, index);
+        mem.copy(str.mem + index, str2.mem, str2.length);
+        mem.copy(str.mem + index + str2.length, self.mem + index, self.length - index);
+        return str;
+    };
+    func search(self: *String, char: u8) size_t {
+        i: size_t = 0;
+        for ; self.mem[i] != char && i < self.length; ++i {}
+        return i;
+    };
+    func searchStr(self: *String, str: String) size_t {
+        if self.length < str.length {
+            return self.length;
+        }
+        i, n: size_t = 0, self.length - str.length + 1;
+        for ; mem.compare(self.mem + i, str.mem, str.length) ! = 0 && i < n; ++i {}
+        return i;
+    };
+    func split(self: *String, sep: u8) vec String {
+        s := *self;
+        strs := (vec String){};
+
+        for i := s.search(sep); i != s.length; i = s.search(sep) {
+            strs.push(s.slice(0, i));
+            s = s.slice(i+1, s.length);
+        }
+        strs.push(s);
+        return strs;
+    };
+    func splitStr(self: *String, sep: String) vec String {
+        s, l := *self, sep.length;
+        strs := (vec String){};
+        for i := s.searchStr(sep); i != s.length; i = s.searchStr(sep) {
+            strs.push(s.slice(0, i));
+            s = s.slice(i+l, s.length);
+        }
+        strs.push(s);
+        return strs;
+    };
+    func free(self: *String) {
+        heap.free(self.mem);
+    };
+};

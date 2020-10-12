@@ -142,7 +142,16 @@ type (
 		Line        int
 		Column      int
 	}
-
+	Label struct {
+		Name   Token
+		Line   int
+		Column int
+	}
+	Goto struct {
+		Name   Token
+		Line   int
+		Column int
+	}
 	Break struct {
 		Line   int
 		Column int
@@ -155,7 +164,6 @@ type (
 		Line   int
 		Column int
 	}
-
 	ExportStatement struct {
 		Stmt   Statement
 		Line   int
@@ -286,6 +294,12 @@ type (
 		Line   int
 		Column int
 	}
+
+	AwaitExpr struct {
+		Expr   Expression
+		Line   int
+		Column int
+	}
 )
 
 type (
@@ -384,6 +398,7 @@ type (
 
 	InternalType struct{}
 	NumberType   struct{}
+	LabelType    struct{}
 )
 
 func (Block) isStatement()           {}
@@ -400,6 +415,8 @@ func (Continue) isStatement()        {}
 func (Defer) isStatement()           {}
 func (Delete) isStatement()          {}
 func (ExportStatement) isStatement() {}
+func (Label) isStatement()           {}
+func (Goto) isStatement()            {}
 
 func (BasicLit) isExpression()            {}
 func (BinaryExpr) isExpression()          {}
@@ -419,6 +436,7 @@ func (ArrayLiteral) isExpression()        {}
 func (LenExpr) isExpression()             {}
 func (SizeExpr) isExpression()            {}
 func (PointerMemberExpr) isExpression()   {}
+func (AwaitExpr) isExpression()           {}
 
 func (BasicLit) isStatement()            {}
 func (BinaryExpr) isStatement()          {}
@@ -438,6 +456,7 @@ func (ArrayLiteral) isStatement()        {}
 func (LenExpr) isStatement()             {}
 func (SizeExpr) isStatement()            {}
 func (PointerMemberExpr) isStatement()   {}
+func (AwaitExpr) isStatement()           {}
 
 func (BasicType) isType()        {}
 func (StructType) isType()       {}
@@ -456,6 +475,7 @@ func (NumberType) isType()       {}
 func (CaptureType) isType()      {}
 func (StaticType) isType()       {}
 func (PromiseType) isType()      {}
+func (LabelType) isType()        {}
 
 func (BasicType) isExpression()        {}
 func (StructType) isExpression()       {}
@@ -474,6 +494,7 @@ func (NumberType) isExpression()       {}
 func (CaptureType) isExpression()      {}
 func (StaticType) isExpression()       {}
 func (PromiseType) isExpression()      {}
+func (LabelType) isExpression()        {}
 
 func (BasicType) isStatement()        {}
 func (StructType) isStatement()       {}
@@ -492,6 +513,7 @@ func (NumberType) isStatement()       {}
 func (CaptureType) isStatement()      {}
 func (StaticType) isStatement()       {}
 func (PromiseType) isStatement()      {}
+func (LabelType) isStatement()        {}
 
 func (s Block) LineM() int {
 	return s.Line
@@ -533,6 +555,12 @@ func (s Delete) LineM() int {
 	return s.Line
 }
 func (s ExportStatement) LineM() int {
+	return s.Line
+}
+func (s Label) LineM() int {
+	return s.Line
+}
+func (s Goto) LineM() int {
 	return s.Line
 }
 
@@ -577,6 +605,12 @@ func (s Delete) ColumnM() int {
 }
 func (s ExportStatement) ColumnM() int {
 	return s.Column
+}
+func (s Label) ColumnM() int {
+	return s.Line
+}
+func (s Goto) ColumnM() int {
+	return s.Line
 }
 
 func (e BasicLit) LineM() int {
@@ -633,6 +667,10 @@ func (e SizeExpr) LineM() int {
 func (e PointerMemberExpr) LineM() int {
 	return e.Line
 }
+func (e AwaitExpr) LineM() int {
+	return e.Line
+}
+
 func (e BasicLit) ColumnM() int {
 	return e.Column
 }
@@ -687,6 +725,9 @@ func (e SizeExpr) ColumnM() int {
 func (e PointerMemberExpr) ColumnM() int {
 	return e.Column
 }
+func (e AwaitExpr) ColumnM() int {
+	return e.Column
+}
 
 func (t BasicType) LineM() int {
 	return t.Line
@@ -728,6 +769,9 @@ func (t InternalType) LineM() int {
 	return -1
 }
 func (t NumberType) LineM() int {
+	return -1
+}
+func (t LabelType) LineM() int {
 	return -1
 }
 func (t CaptureType) LineM() int {
@@ -782,6 +826,9 @@ func (t InternalType) ColumnM() int {
 func (t NumberType) ColumnM() int {
 	return -1
 }
+func (t LabelType) ColumnM() int {
+	return -1
+}
 func (t CaptureType) ColumnM() int {
 	return t.Column
 }
@@ -825,7 +872,7 @@ var I64Type = Typedef{Name: I64Token, Type: BasicType{Expr: IdentExpr{Value: Tok
 var F32Token = Token{Buff: []byte("f32"), PrimaryType: Identifier}
 var F32Type = Typedef{Name: F32Token, Type: BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("$f32"), PrimaryType: Identifier}}}}
 
-var F64Token = Token{Buff: []byte("i64"), PrimaryType: Identifier}
+var F64Token = Token{Buff: []byte("f64"), PrimaryType: Identifier}
 var F64Type = Typedef{Name: F64Token, Type: BasicType{Expr: IdentExpr{Value: Token{Buff: []byte("$f64"), PrimaryType: Identifier}}}}
 
 var True = IdentExpr{Value: Token{Buff: []byte("true"), PrimaryType: Identifier}}

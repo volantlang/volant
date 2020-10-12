@@ -1,4 +1,10 @@
-import "libuv.h"
+
+export struct SockAddr {
+	sa_family: $sa_family_t;
+	sa_data:   [14]i8;
+};
+
+import "libuv.h";
 
 // Loop
 export enum RunMode {
@@ -17,30 +23,30 @@ export struct Loop {
 	func init(self: *Loop) {
 		$uv_loop_init(&self.__loop);
 		$uv_loop_set_data(&self.__loop, cast(*void)self);
-	}
+	};
 	func close(self: *Loop) {
 		$uv_loop_close(&self.__loop);
-	}
+	};
 	func configure(self: *Loop, option: LoopOption) {
 		$uv_loop_configure(&self.__loop, cast($uv_loop_option)option);
-	}
+	};
 	func run(self: *Loop, mode: RunMode) i32 {
 		return cast(i32)$uv_run(&self.__loop, cast($uv_run_mode)mode);
-	}
+	};
 	func stop(self: *Loop) {
 		$uv_stop(&self.__loop);
-	}
+	};
 	func now(self: *Loop) u64 {
 		return $uv_now(&self.__loop);
-	}
+	};
 	func updateTime(self: *Loop){
 		$uv_update_time(&self.__loop);
-	}
-}
+	};
+};
 
 export func getDefaultLoop() *Loop {
 	return cast(*Loop)$uv_default_loop(); // cast works cuz they have same size
-}
+};
 
 // Handle
 export enum HandleType {
@@ -63,109 +69,271 @@ export enum HandleType {
 	Signal,
 	File,
 	HandleTypeMax
-}
+};
 
-struct HandleData {
-	self: *void;
+export struct Buf {
+	base: *u8;
+	len:  size_t;
+};
+
+export struct Data {
+	self:     *void;
 	internal: *void;
-	user: *void;
-}
+	user:     *void;
+};
 
+union _AnyHandle {
+	handle:      $uv_handle_t;
+	stream:      $uv_stream_t;
+	process:     $uv_process_t;
+	signal:      $uv_signal_t;
+	tcp:         $uv_tcp_t;
+	pipe:        $uv_pipe_t;
+	prepare:     $uv_prepare_t;
+	check:       $uv_check_t;
+	idle:        $uv_idle_t;
+	async_:      $uv_async_t;
+	timer:       $uv_timer_t;
+	getaddrinfo: $uv_getaddrinfo_t;
+	fs_event:    $uv_fs_event_t;
+};
+  
 export struct Handle {
-	Loop: *Loop;
-	__handle: $uv_any_handle;
-	_data: HandleData;
+	loop:     *Loop;
+	__handle: _AnyHandle;
+	_data:    Data;
 
 	func _init(self: *Handle) {
 		self._data.self = cast(*void)self;
-		$uv_handle_set_data(cast(*$uv_handle_t)&self.__handle, &self._data);
-	}
+		$uv_handle_set_data(&self.__handle.handle, &self._data);
+	};
 	func _setInternalData(self: *Handle, data: *void) {
 		self._data.internal = data;
-	}
+	};
 	func _getInternalData(self: *Handle) *void {
 		return self._data.internal;
-	}
+	};
 	func _setUserData(self: *Handle, data: *void) {
 		self._data.user = data;
-	}
+	};
 	func _getUserData(self: *Handle) *void {
 		return self._data.user;
-	}
+	};
 	func isActive(self: *Handle) bool {
-		return $uv_is_active(cast(*$uv_handle_t)&self.__handle) != 0;
-	}
+		return $uv_is_active(&self.__handle.handle) != 0;
+	};
 	func isClosing(self: *Handle) bool {
-		return $uv_is_closing(cast(*$uv_handle_t)&self.__handle) != 0;
-	}
+		return $uv_is_closing(&self.__handle.handle) != 0;
+	};
 	func close(self: *Handle, cb: func(*Handle)) {
 		if !self.isClosing() {
 			self._setInternalData(cast(*void)cb);
-			$uv_close(cast(*$uv_handle_t)&self.__handle, cast($uv_close_cb)$_uv_close_cb);
+			$uv_close(&self.__handle.handle, cast($uv_close_cb)$vo_uv_close_cb);
 		}
-	}
+	};
 	func ref(self: *Handle) {
-		$uv_ref(cast(*$uv_handle_t)&self.__handle);
-	}
+		$uv_ref(&self.__handle.handle);
+	};
 	func unref(self: *Handle) {
-		$uv_unref(cast(*$uv_handle_t)&self.__handle);
-	}
+		$uv_unref(&self.__handle.handle);
+	};
 	func setData(self: *Handle, data: *void) {
 		self._setUserData(data);
-	}
+	};
 	func getData(self: *Handle) *void {
 		return self._getUserData();
-	}
-}
+	};
+};
 
 // Timer
 export struct Timer {
 	..Handle;
 	
 	func init(self: *Timer, loop: *Loop){
-		self.Loop = loop;
-		$uv_timer_init(&loop.__loop, cast(*$uv_timer_t)&self.__handle);
+		self.loop = loop;
+		$uv_timer_init(&loop.__loop, &self.__handle.timer);
 		self._init();
-	}
+	};
 	func start(self: *Timer, cb: func(*Timer), timeout: u64, repeat: u64) {
 		self._setInternalData(cast(*void)cb);
-		$uv_timer_start(cast(*$uv_timer_t)&self.__handle, cast($uv_timer_cb)$_uv_timer_cb, timeout, repeat);
-	}
+		$uv_timer_start(&self.__handle.timer, cast($uv_timer_cb)$vo_uv_timer_cb, timeout, repeat);
+	};
 	func again(self: *Timer) {
-		$uv_timer_again(cast(*$uv_timer_t)&self.__handle);
-	}
+		$uv_timer_again(&self.__handle.timer);
+	};
 	func setRepeat(self: *Timer, repeat: u64) {
-		$uv_timer_set_repeat(cast(*$uv_timer_t)&self.__handle, repeat);
-	}
+		$uv_timer_set_repeat(&self.__handle.timer, repeat);
+	};
 	func getRepeat(self: *Timer) u64 {
-		return cast(u64)$uv_timer_get_repeat(cast(*$uv_timer_t)&self.__handle);
-	}
+		return cast(u64)$uv_timer_get_repeat(&self.__handle.timer);
+	};
 	func stop(self: *Timer) {
-		$uv_timer_stop(cast(*$uv_timer_t)&self.__handle);
-	}
-}
+		$uv_timer_stop(&self.__handle.timer);
+	};
+};
+
+// Prepare
+export struct Prepare {
+	..Handle;
+
+	func init(self: *Prepare, loop: *Loop){
+		self.loop = loop;
+		$uv_prepare_init(&loop.__loop, &self.__handle.prepare);
+		self._init();
+	};
+	func start(self: *Prepare, callback: func(*Prepare)) i32 {
+		self._setInternalData(cast(*void)callback);
+		return cast(i32)$uv_prepare_start(&self.__handle.prepare, cast($uv_prepare_cb)$vo_uv_prepare_cb);
+	};
+	func stop(self: *Prepare){
+		$uv_prepare_stop(&self.__handle.prepare);
+	};
+};
+
+// Idle
+export struct Idle {
+	..Handle;
+
+	func init(self: *Idle, loop: *Loop){
+		self.loop = loop;
+		$uv_idle_init(&loop.__loop, cast(*$uv_idle_t)&self.__handle);
+		self._init();
+	};
+	func start(self: *Idle, callback: func(*Idle)) i32 {
+		self._setInternalData(cast(*void)callback);
+		return cast(i32)$uv_idle_start(&self.__handle.idle, cast($uv_idle_cb)$vo_uv_idle_cb);
+	};
+	func stop(self: *Idle){
+		$uv_idle_stop(&self.__handle.idle);
+	};
+};
 
 // Check
 export struct Check {
 	..Handle;
 	
 	func init(self: *Check, loop: *Loop){
-		self.Loop = loop;
-		$uv_check_init(&loop.__loop, cast(*$uv_check_t)&self.__handle);
+		self.loop = loop;
+		$uv_check_init(&loop.__loop, &self.__handle.check);
 		self._init();
-	}
-	func start(self: *Check, cb: *func(*Check)){
+	};
+	func start(self: *Check, cb: *func(*Check)) i32 {
 		self._setInternalData(cast(*void)cb);
-		$uv_check_start(cast(*$uv_check_t)&self.__handle, cast($uv_check_cb)$_uv_check_cb);
-	}
+		return cast(i32)$uv_check_start(&self.__handle.check, cast($uv_check_cb)$vo_uv_check_cb);
+	};
 	func stop(self: *Check){
-		$uv_check_stop(cast(*$uv_check_t)&self.__handle);
-	}
-	func _callback(check: *$uv_check_t){
-		data := *cast(*HandleData)($uv_handle_get_data(cast(*$uv_handle_t)check));
-		(*(cast(*func(*Check))data.internal))(data.self);
-	}
-}
+		$uv_check_stop(&self.__handle.check);
+	};
+};
+
+// Async
+export struct Async {
+	..Handle;
+	
+	func init(self: *Async, loop: *Loop, cb: *func(*Async)) i32 {
+		self.loop = loop;
+		self._init();
+		self._setInternalData(cast(*void)cb);
+		return $uv_async_init(&loop.__loop, &self.__handle.async_, cast($uv_async_cb)$vo_uv_async_cb);
+	};
+	func send(self: *Check) i32 {
+		return cast(i32)$uv_async_send(&self.__handle.async_);
+	};
+};
+
+// Process
+export typedef PID $uv_pid_t;
+export typedef GID $uv_gid_t;
+export typedef UID $uv_uid_t;
+
+export enum ProcessFlags {
+    SETUID                     = (1 << 0),
+    SETGID                     = (1 << 1),
+    WINDOWS_VERBATIM_ARGUMENTS = (1 << 2),
+    DETACHED                   = (1 << 3),
+    WINDOWS_HIDE               = (1 << 4),
+    WINDOWS_HIDE_CONSOLE       = (1 << 5),
+    WINDOWS_HIDE_GUI           = (1 << 6)
+};
+export enum StdioFlags {
+    IGNORE         = 0x00,
+    CREATE_PIPE    = 0x01,
+    INHERIT_FD     = 0x02,
+    INHERIT_STREAM = 0x04,
+    READABLE_PIPE  = 0x10,
+    WRITABLE_PIPE  = 0x20
+};
+
+export struct ProcessOptions {
+	exitCallback: func (*Process, i64, i32);
+	file:         const *i8;
+	args:         **i8;
+	env:          **i8;
+	cwd:          const *i8;
+	flags:        u32;
+	stdioCount:   i32;
+	stdio:        *StdioContainer;
+	uid:          UID;
+	gid:          GID;
+};
+
+union StdioContainerData {
+	stream: *Stream;
+	fd:     i32;
+};
+
+export struct StdioContainer {
+    flags: StdioFlags;
+	data:  StdioContainerData;
+};
+
+export struct Process {
+	..Handle;
+
+	func init(self: *Process, loop: *Loop){
+		self.loop = loop;
+		self._init();
+	};
+	func spawn(self: *Process, options: ProcessOptions) i32 {
+		self._setInternalData(options.exitCallback);
+		newOpts := new ProcessOptions(options);
+		newOpts.exitCallback = cast(func (*Process, i64, i32))$vo_uv_process_exit_cb;
+		return cast(i32)$uv_spawn(&self.loop.__loop, &self.__handle.process, cast(*$uv_process_options_t)newOpts);
+	};
+	func kill(self: *Process, signum: i32) i32 {
+		return cast(i32)$uv_process_kill(&self.__handle.process, signum);
+	};
+	func getPid(self: *Process) PID {
+		return cast(PID)$uv_process_get_pid(&self.__handle.process);
+	};
+};
+
+export func kill(pid: i32, signum: i32) i32 {
+	return cast(i32)$uv_kill(pid, signum);
+};
+
+export func disableStdioInheritence() {
+	$uv_disable_stdio_inheritance();
+};
+
+// Signal
+export struct Signal {
+	..Handle;
+
+	func init(self: *Signal, loop: *Loop) {
+		self.loop = loop;
+		$uv_signal_init(&loop.__loop, &self.__handle.signal);
+		self._init();
+	};
+	func start(self: *Signal, cb: func(*Signal, i32), signal: i32) i32 {
+		self._setInternalData(cast(*void)cb);
+		return cast(i32)$uv_signal_start(&self.__handle.signal, cast($uv_signal_cb)$vo_uv_signal_cb, signal);
+	};
+	func startOneshot(self: *Signal, cb: func(*Signal, i32), signal: i32) i32 {
+		self._setInternalData(cast(*void)cb);
+		return cast(i32)$uv_signal_start_oneshot(&self.__handle.signal, cast($uv_signal_cb)$vo_uv_signal_cb, signal);
+	};
+};
 
 // Req
 export enum ReqType {
@@ -180,63 +348,160 @@ export enum ReqType {
 	GetAddrInfo,
 	GetNameInfo,
 	ReqTypeMax
-}
+};
+
+union _AnyReq {
+	req:      $uv_req_t;
+	write:    $uv_write_t;
+	connect:  $uv_connect_t;
+	shutdown: $uv_shutdown_t;
+	fsReq:    $uv_fs_t;
+	workReq:  $uv_work_t;
+};
 
 export struct Req {
-	__req: $uv_any_req;
-
+	__req: _AnyReq;
+	_data: Data;
+	
+	func init(self: *Req){
+		self._data.self = self;
+		$uv_req_set_data(&self.__req.req, cast(*void)&self._data);
+	};
 	func cancel(self: *Req) bool {
-		return $uv_cancel(cast(*$uv_req_t)&self.__req) == 0;
-	}
+		return $uv_cancel(&self.__req.req) == 0;
+	};
 	func setData(self: *Req, data: *void) {
-		$uv_req_set_data(cast(*$uv_req_t)&self.__req, data);
-	}
+		self._data.user = data;
+	};
 	func getData(self: *Req) *void {
-		return $uv_req_get_data(cast(*$uv_req_t)&self.__req);
-	}
-}
-/*
+		return self._data.user;
+	};
+	func _setInternalData(self: *Req, data: *void){
+		self._data.internal = data;
+	};
+	func _getInternalData(self: *Req) *void {
+		return self._data.internal;
+	};
+};
+
 // Stream
+
+export struct ShutdownReq {
+	..Req;
+	func getHandle(self: *ShutdownReq) *Stream {
+		return cast(*Stream)(self.__req.shutdown.handle);
+	};
+};
+
+export struct ConnectReq {
+	..Req;
+	func getHandle(self: *ConnectReq) *Stream {
+		return cast(*Stream)(self.__req.connect.handle);
+	};
+};
+
+export struct WriteReq {
+	..Req;
+	func getHandle(self: *WriteReq) *Stream {
+		return cast(*Stream)(&self.__req.write.handle);
+	};
+	func getSendHandle(self: *WriteReq) *Stream {
+		return cast(*Stream)(&self.__req.write.send_handle);
+	};
+};
+
 export struct Stream {
 	..Handle;
 
-	func resume(self: *Stream, req: *Req) {
-
-	}
-	func pause(self: *Stream) {
-		$uv_read_stop(&self.__handle);
-	}
-	func shutdown(self: *Stream, req: *Req) {
-
-	}
+	func shutdown(self: *Stream, req: *ShutdownReq, cb: func(*ShutdownReq, i32)) i32 {
+		req._setInternalData(cb);
+		return cast(i32)$uv_shutdown(&req.__req.shutdown, &self.__handle.stream, cast($uv_shutdown_cb)$vo_uv_shutdown_cb);
+	};
+	func listen(self: *Stream, backlog: i32, cb: func(*Stream, i32)) i32 {
+		// data := cast(*StreamData)self._getInternalData();
+		// data.connectionCb = cb;
+		self._setInternalData(cast(*void)cb);
+		return cast(i32)$uv_listen(&self.__handle.stream, backlog, cast($uv_connection_cb)$vo_uv_connection_cb);
+	};
+	func accept(self: *Stream, client: *Stream) i32 {
+		return cast(i32)$uv_accept(&self.__handle.stream, cast(*$uv_stream_t)&client.__handle);
+	};
+	func readStart(self: *Stream, cb: func(*Stream, i64, *Buf)) i32 {
+		self._setInternalData(cb);
+		return cast(i32)$uv_read_start(&self.__handle.stream, cast($uv_alloc_cb)$vo_uv_alloc_cb, cast($uv_read_cb)$vo_uv_read_cb);
+	};
+	func readStop(self: *Stream) i32 {
+		return cast(i32)$uv_read_stop(&self.__handle.stream);
+	};
+	func write(self: *Stream, req: *WriteReq, bufs: []Buf, nbufs: size_t, cb: func(*WriteReq, i32)) i32 {
+		if cb != null {
+			req._setInternalData(cast(*void)cb);
+			return cast(i32)$uv_write(&req.__req.write, &self.__handle.stream, bufs, nbufs, cast($uv_write_cb)$vo_uv_write_cb);
+		} else {
+			return cast(i32)$uv_write(&req.__req.write, &self.__handle.stream, bufs, nbufs, null);
+		}
+	};
+	func write2(self: *Stream, req: *WriteReq, bufs: []Buf, nbufs: size_t, sendHandle: *Stream, cb: func(*WriteReq, i32)) i32 {
+		req._setInternalData(cast(*void)cb);
+		return cast(i32)$uv_write2(&req.__req.write, &self.__handle.stream, bufs, nbufs, &sendHandle.__handle.stream, cast($uv_write_cb)$vo_uv_write_cb);
+	};
+	func tryWrite(self: *Stream, req: *WriteReq, bufs: []Buf, nbufs: size_t) i32 {
+		return cast(i32)$uv_try_write(&self.__handle.stream, bufs, nbufs);
+	};
 	func isReadable(self: *Stream) bool {
-		return cast(bool)uv_is_readable(&self.__stream);
-	}
+		return cast(bool)$uv_is_readable(&self.__handle.stream);
+	};
 	func isWritable(self: *Stream) bool {
-		return cast(bool)uv_is_writable(&self.__stream);
-	}
-	func _onRead(stream: *$uv_stream_t, num: $ssize_t, buffer: *$uv_buf_t) {
-		data := *cast(*HandleData)($uv_handle_get_data(cast(*$uv_handle_t)check));
-		(*(cast(*func(*Check))data.internal))(data.self);
-	}
-}
-
-struct StreamData {
-	readCb: func(*Stream, *u8);
-	writeCb: func(*Stream, i32);
-	connectCb: func(*Stream, i32);
-	shutdownCb: func(*Stream, i32);
-	connectionCb: func(*Stream, i32);
-}
-
-// Tty
-export struct Tty {
-	..Handle;
-
-	init := func (self: *Tty, loop: *Loop, fd: i32, unused: i32){
-		self.Loop = loop;
-		$uv_tty_init(&loop.__loop, cast(*$uv_tty_t)&self.__handle, cast($uv_file)fd, unused);
-		self._init();
+		return cast(bool)$uv_is_writable(&self.__handle.stream);
+	};
+	func setBlocking(self: *Stream, blocking: i32) i32 {
+		return cast(i32)$uv_stream_set_blocking(&self.__handle.stream, cast(i32)blocking);
+	};
+	func getWriteQueueSize(self: *Stream) size_t {
+		return cast(size_t)$uv_stream_get_write_queue_size(&self.__handle.stream);
 	};
 };
-*/
+
+// Tcp
+export typedef OSSocket i32;
+
+export struct Tcp {
+	..Stream;
+
+	func init(self: *Tcp, loop: *Loop) i32 {
+		self.loop = loop;
+		self._init();
+		return cast(i32)$uv_tcp_init(&loop.__loop, &self.__handle.tcp);
+	};
+	func initEx(self: *Tcp, loop: *Loop, flags: u32) i32 {
+		self.loop = loop;
+		self._init();
+		return cast(i32)$uv_tcp_init_ex(&loop.__loop, &self.__handle.tcp, flags);
+	};
+	func nodelay(self: *Tcp, enable: bool) i32 {
+		return cast(i32)$uv_tcp_nodelay(&self.__handle.tcp, cast(i32)enable);
+	};
+	func keepalive(self: *Tcp, enable: bool, delay: u32) i32 {
+		return cast(i32)$uv_tcp_keepalive(&self.__handle.tcp, cast(i32)enable, delay);
+	};
+	func simultaneousAccepts(self: *Tcp, enable: bool) i32 {
+		return cast(i32)$uv_tcp_simultaneous_accepts(&self.__handle.tcp, cast(i32)enable);
+	};
+	func bind(self: *Tcp, addr: *SockAddr, flags: u32) i32 {
+		return cast(i32)$uv_tcp_bind(&self.__handle.tcp, addr, flags);
+	};
+	func getSockName(self: *Tcp, name: *SockAddr, namelen: *i32) i32 {
+		return cast(i32)$uv_tcp_getsockname(&self.__handle.tcp, name, namelen);
+	};
+	func getPeerName(self: *Tcp, name: *SockAddr, namelen: *i32) i32 {
+		return cast(i32)$uv_tcp_getpeername(&self.__handle.tcp, name, namelen);
+	};
+	func connect(self: *Tcp, req: *ConnectReq, addr: *SockAddr, cb: func(*ConnectReq, i32)) i32 {
+		req._setInternalData(cast(*void)cb);
+		return cast(i32)$uv_tcp_connect(&req.__req.connect, &self.__handle.tcp, addr, cast($uv_connect_cb)$vo_uv_connect_cb);
+	};
+	func closeReset(self: *Tcp, cb: func(*Stream)) i32 {
+		self._setInternalData(cb);
+		return cast(i32)$uv_tcp_close_reset(&self.__handle.tcp, cast($uv_close_cb)$vo_uv_close_cb);
+	};
+};

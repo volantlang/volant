@@ -193,9 +193,21 @@ func (parser *Parser) parseStatementNoSemicolon() Statement {
 	case FunctionKeyword:
 		parser.eatLastToken()
 		st = parser.parseFunctionDec()
+	case LabelKeyword:
+		parser.eatLastToken()
+		st = Label{Line: line, Column: column, Name: parser.expect(Identifier, SecondaryNullType)}
+		parser.eatLastToken()
+	case GotoKeyword:
+		parser.eatLastToken()
+		st = Goto{Line: line, Column: column, Name: parser.expect(Identifier, SecondaryNullType)}
+		parser.eatLastToken()
 	default:
 		parser.fork(0)
 		expr := parser.parseExpression()
+
+		if expr == nil {
+			break
+		}
 
 		if token := parser.ReadToken(); token.PrimaryType == AssignmentOperator {
 			parser.moveToFork(0)
@@ -256,6 +268,14 @@ func (parser *Parser) parseStatement() Statement {
 	case DeleteKeyword:
 		parser.eatLastToken()
 		st = Delete{Exprs: parser.parseExpressionArray(), Line: line, Column: column}
+	case LabelKeyword:
+		parser.eatLastToken()
+		st = Label{Line: line, Column: column, Name: parser.expect(Identifier, SecondaryNullType)}
+		parser.eatLastToken()
+	case GotoKeyword:
+		parser.eatLastToken()
+		st = Goto{Line: line, Column: column, Name: parser.expect(Identifier, SecondaryNullType)}
+		parser.eatLastToken()
 	case SemiColon:
 		parser.eatLastToken()
 		return NullStatement{}
@@ -1125,6 +1145,9 @@ func (parser *Parser) parseExpr(state int) Expression {
 			}
 
 			return HeapAlloc{Type: Typ, Val: Expr, Line: line, Column: column}
+		} else if token.PrimaryType == AwaitKeyword {
+			parser.eatLastToken()
+			return AwaitExpr{Expr: parser.parseExpr(0), Line: line, Column: column}
 		} else if token.PrimaryType == CastKeyword {
 			parser.eatLastToken()
 

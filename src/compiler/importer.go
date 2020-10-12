@@ -23,9 +23,16 @@ int main() {
 
 var ProjectDir string
 
-func ImportFile(dir string, base string, isMain bool, num2 int) *SymbolTable {
+type file struct {
+	exports *SymbolTable
+	index   int
+}
+
+var files = map[string]file{}
+
+func ImportFile(dir string, base string, isMain bool) (*SymbolTable, int) {
+	t := num
 	n := strconv.Itoa(num)
-	n2 := strconv.Itoa(num2)
 
 	if isMain {
 		ProjectDir = dir
@@ -38,7 +45,11 @@ func ImportFile(dir string, base string, isMain bool, num2 int) *SymbolTable {
 		rel, _ = Path.Rel(libPath, path)
 	}
 
-	OutPath := Path.Join(ProjectDir, "_build", Path.Dir(rel), n2+Path.Base(base))
+	if f, ok := files[rel]; ok {
+		return f.exports, f.index
+	}
+
+	OutPath := Path.Join(ProjectDir, "_build", rel)
 
 	if isMain {
 		OutPath += ".c"
@@ -78,8 +89,10 @@ func ImportFile(dir string, base string, isMain bool, num2 int) *SymbolTable {
 			f.Write([]byte("#ifndef H_" + n + "\n#define H_" + n + "\n"))
 		}
 		f.Write([]byte("#include \"internal/default.h\"\n"))
-		f.Write(CompileOnlyDeclarations(newAst))
 
+		f.Write(CompileImports(newAst))
+		f.Write(CompileTypedefs(newAst))
+		f.Write(CompileOnlyDeclarations(newAst))
 		f.Write(CompileOnlyInitializations(newAst))
 
 		if isMain {
@@ -89,7 +102,8 @@ func ImportFile(dir string, base string, isMain bool, num2 int) *SymbolTable {
 		}
 		f.Close()
 
-		return exports
+		files[rel] = file{exports: exports, index: t}
+		return exports, t
 	}
-	return &SymbolTable{}
+	return &SymbolTable{}, t
 }

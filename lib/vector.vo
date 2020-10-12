@@ -1,0 +1,17 @@
+import "heap.vo";
+
+struct VectorLayout {
+    isOwner: bool;
+    length: size_t;
+    capacity: size_t;
+    mem: *u8;
+};
+
+func make(length: size_t, el_size: size_t) *void {
+    vector := new VectorLayout;
+    vector.mem = heap.malloc(length*el_size);
+    vector.length = length;
+    vector.capacity = length;
+    vector.isOwner = true;
+    return cast(*void)vector;
+};

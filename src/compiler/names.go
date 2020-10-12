@@ -45,8 +45,8 @@ func isGlobal(buf []byte) bool {
 	return false
 }
 
-func getLastImportPrefix() string {
-	return "v" + strconv.Itoa(num-1) + "_"
+func getImportPrefix(n int) string {
+	return "v" + strconv.Itoa(n) + "_"
 }
 
 func getPropName(prop Token) Token {
@@ -72,7 +72,7 @@ func (n *Namespace) getActualName(token Token) Token {
 		return token
 	}
 	newToken := Token{Line: token.Line, Column: token.Column, PrimaryType: token.PrimaryType, SecondaryType: token.SecondaryType, Flags: 0}
-	newToken.Buff = make([]byte, len(token.Buff)+len(n.Base)+1)
+	newToken.Buff = make([]byte, len(token.Buff)+1)
 
 	switch token.Flags {
 	case 2:
@@ -80,7 +80,7 @@ func (n *Namespace) getActualName(token Token) Token {
 	case 7:
 		copy(newToken.Buff, token.Buff[2:])
 	case 8:
-		copy(newToken.Buff, token.Buff[1:])
+		copy(newToken.Buff, token.Buff[2:])
 	default:
 		copy(newToken.Buff, token.Buff[1+len(n.Base):])
 	}
@@ -96,6 +96,10 @@ func (n *Namespace) getStrctDefaultName(strct Token) Token {
 
 func (n *Namespace) getStrctMethodName(name Token, strct Token) Token {
 	return Token{Line: strct.Line, Column: strct.Column, PrimaryType: strct.PrimaryType, SecondaryType: strct.SecondaryType, Flags: 5, Buff: []byte("m" + n.Base + string(name.Buff) + "_" + string(strct.Buff))}
+}
+
+func (n *Namespace) getLabelName(name Token) Token {
+	return Token{Line: name.Line, Column: name.Column, PrimaryType: name.PrimaryType, SecondaryType: name.SecondaryType, Flags: 10, Buff: []byte("l_" + string(name.Buff))}
 }
 
 func (n *Namespace) joinName(prefix []byte, name Token) Token {

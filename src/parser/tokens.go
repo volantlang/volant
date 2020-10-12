@@ -69,7 +69,9 @@ const (
 	StaticKeyword   PrimaryTokenType = 129
 	CaptureKeyword  PrimaryTokenType = 130
 	PromiseKeyword  PrimaryTokenType = 131
-
+	LabelKeyword    PrimaryTokenType = 132
+	GotoKeyword     PrimaryTokenType = 133
+	AwaitKeyword    PrimaryTokenType = 134
 	// the parser stops parsing when it receives either of these types and shows the correct error message
 	EOF        PrimaryTokenType = 254
 	ErrorToken PrimaryTokenType = 255
@@ -173,6 +175,9 @@ var Keywords = map[string]PrimaryTokenType{
 	"static":  StaticKeyword,
 	"capture": CaptureKeyword,
 	"promise": PromiseKeyword,
+	"label":   LabelKeyword,
+	"goto":    GotoKeyword,
+	"await":   AwaitKeyword,
 	// more stuff
 }
 

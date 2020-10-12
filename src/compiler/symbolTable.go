@@ -18,6 +18,15 @@ type Node struct {
 }
 
 func (t *SymbolTable) Add(node Node) {
+	/*
+		if bytes.Compare(node.Identifier.Buff, []byte("self")) == 0 {
+			// fmt.Print("here")
+			fmt.Println()
+			fmt.Println(string(node.Type.(PointerType).BaseType.(BasicType).Expr.(IdentExpr).Value.Buff))
+			fmt.Printf("\n%#v\n\n", node.Type)
+			debug.PrintStack()
+		}
+	*/
 	t.Nodes = append(t.Nodes, node)
 }
 

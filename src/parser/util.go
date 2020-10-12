@@ -68,8 +68,10 @@ func Pow(a, b int) int {
 
 func HexToInt(b byte) int {
 	if IsNumDec(b) {
-		return int(b - 48)
+		return int(b - '0')
+	} else if b < 'a' {
+		return int(b - 'A' + 10)
 	} else {
-		return int(b - 65)
+		return int(b - 'a' + 10)
 	}
 }

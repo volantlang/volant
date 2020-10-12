@@ -30,9 +30,9 @@ func main() {
 		file := path.Clean(os.Args[2])
 		cmd.Parse(os.Args[3:])
 
-		ImportFile(path.Dir(file), path.Base(file), true, 0)
+		ImportFile(path.Dir(file), path.Base(file), true)
 
-		out, err := exec.Command("clang", path.Join(path.Dir(file), "_build", "0"+path.Base(file)+".c"), "-pthread", "-luv", "-fblocks", "-lBlocksRuntime", "-lgc", "-I"+libPath, *clang, "-o", path.Join(path.Dir(file), "a.out")).CombinedOutput()
+		out, err := exec.Command("clang", path.Join(path.Dir(file), "_build", path.Base(file)+".c"), "-pthread", "-luv", "-fblocks", "-lBlocksRuntime", "-lgc", "-I"+libPath, *clang, "-o", path.Join(path.Dir(file), "a.out")).CombinedOutput()
 
 		if err != nil {
 			fmt.Println(string(out))

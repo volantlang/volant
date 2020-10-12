@@ -1,0 +1,43 @@
+import "io.vo";
+
+export func revstr(str: *u8, len: size_t, temp: *u8) {
+    i := len - 1;
+    for ci: size_t = 0; ci < len; ci++ {
+        temp[ci] = str[i--];
+    }
+    for i = 0; i < len; i++ {
+        str[i] = temp[i];
+    }
+};
+
+export func itos(num: i32, buf: *u8) {
+    i: u32 = 0;
+    if num < 0 {
+        *(buf++) = '-';
+    }
+    for ; num > 1; i++ {
+        buf[i] = num % 10 + '0';
+        num /= 10;
+    }
+    arr: [20]u8;
+    revstr(buf, i, arr);
+};
+
+export func utos(num: u32, buf: *u8) size_t {
+    i: size_t;
+    for i = 0; num >= 1; i++ {
+        buf[i] = num % 10 + '0';
+        num /= 10;
+    }
+    if i == 0 {
+        buf[0] = '0';
+        buf[1] = 0;
+        return 1; 
+    }
+
+    buf[i] = 0;
+    arr: [10]u8;
+    revstr(buf, i, arr);
+
+    return i;
+};

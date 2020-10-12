@@ -1,8 +1,7 @@
-
 export func work copy(fnc: *void) *void {
     return $_Block_copy(fnc);
 };
 
 export func work free(fnc: *void) {
-    $Block_release(fnc);
+    $_Block_release(fnc);
 };
