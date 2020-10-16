@@ -830,7 +830,7 @@ func (f *Formatter) memberExpr(expr MemberExpr) Expression {
 				return IdentExpr{Value: f.NameSp.joinName(val, f.NameSp.getActualName(expr.Prop))}
 			}
 		default:
-			return MemberExpr{Base: f.expr(expr.Base), Prop: expr.Prop}
+			return MemberExpr{Base: f.expr(expr.Base), Prop: f.NameSp.getPropName(expr.Prop)}
 		}
 	}
 
@@ -1179,7 +1179,6 @@ func (f *Formatter) getType(expr Expression) Type {
 			return InternalType{}
 		}
 	}
-
 	return nil
 }
 

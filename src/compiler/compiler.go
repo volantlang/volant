@@ -238,7 +238,6 @@ func (c *Compiler) usesType(t Type, t2 BasicType) bool {
 		// fmt.Println(string(t2.Expr.(IdentExpr).Value.Buff))
 		for _, typ := range t.(UnionType).Types {
 			if c.usesType(typ, t2) {
-				print("truehehe\n")
 				return true
 			}
 		}
@@ -808,10 +807,12 @@ func (c *Compiler) expression(expr Expression) {
 		c.compoundLiteral(expr.(CompoundLiteral))
 	case TypeCast:
 		c.openParen()
+		c.openParen()
 		c.Type(expr.(TypeCast).Type.(Type), []byte{})
 		c.closeParen()
 		c.openParen()
 		c.expression(expr.(TypeCast).Expr)
+		c.closeParen()
 		c.closeParen()
 	case HeapAlloc:
 		c.heapAlloc(expr.(HeapAlloc))
@@ -1236,6 +1237,7 @@ func (c *Compiler) compoundLiteral(expr CompoundLiteral) {
 	}
 
 	c.openParen()
+	c.openParen()
 	c.Type(expr.Name, []byte{})
 	c.closeParen()
 
@@ -1259,6 +1261,7 @@ func (c *Compiler) compoundLiteral(expr CompoundLiteral) {
 		}
 	}
 	c.closeCurlyBrace()
+	c.closeParen()
 }
 
 func (c *Compiler) asyncCompoundLiteral(expr CompoundLiteral) int {

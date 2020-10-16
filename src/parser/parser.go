@@ -197,6 +197,8 @@ func (parser *Parser) parseStatementNoSemicolon() Statement {
 		parser.eatLastToken()
 		st = Label{Line: line, Column: column, Name: parser.expect(Identifier, SecondaryNullType)}
 		parser.eatLastToken()
+		parser.expect(PrimaryNullType, Colon)
+		parser.eatLastToken()
 	case GotoKeyword:
 		parser.eatLastToken()
 		st = Goto{Line: line, Column: column, Name: parser.expect(Identifier, SecondaryNullType)}
@@ -272,6 +274,9 @@ func (parser *Parser) parseStatement() Statement {
 		parser.eatLastToken()
 		st = Label{Line: line, Column: column, Name: parser.expect(Identifier, SecondaryNullType)}
 		parser.eatLastToken()
+		parser.expect(PrimaryNullType, Colon)
+		parser.eatLastToken()
+		return st
 	case GotoKeyword:
 		parser.eatLastToken()
 		st = Goto{Line: line, Column: column, Name: parser.expect(Identifier, SecondaryNullType)}

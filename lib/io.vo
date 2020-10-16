@@ -1,12 +1,12 @@
-export func work printChar(char: u8){
+export func work printChar(char: i8){
     $putchar(char);
 };
 
-export func work getChar() u8 {
-    return cast(u8)$getchar();
+export func work getChar() i8 {
+    return cast(i8)$getchar();
 };
 
-export func work print(buf: *u8){
+export func work print(buf: *i8){
     c := buf[0];
     for i: size_t = 1; c != 0; ++i {
         printChar(c);
@@ -14,7 +14,18 @@ export func work print(buf: *u8){
     }
 };
 
-export func work println(buf: *u8){
+export func work printn(buf: *i8, n: size_t){
+    for i: size_t = 0; i < n; ++i {
+        printChar(*(buf++));
+    }
+};
+
+export func work printnln(buf: *i8, n: size_t){
+    printn(buf, n);
+    printChar('\n');
+};
+
+export func work println(buf: *i8){
     print(buf);
     printChar('\n');
 };

@@ -36,7 +36,7 @@ void _vector_free(VectorLayout *);
     }                                           \
     vector->mem[vector->length++] = value; })    
 
-#define VECTOR_APPEND(vector, ptr, length) ((void *)_vector_append((VectorLayout *)vector, (char *)ptr, length*(sizeof(*ptr)), sizeof(*vector->mem)))
+#define VECTOR_APPEND(vector, ptr, length) ((void *)_vector_append((VectorLayout *)vector, (char *)ptr, length, sizeof(*vector->mem)))
 #define VECTOR_POP(vector) (vector->mem[--vector->length])  
 #define VECTOR_CONCAT(vector1, vector2) ((void *)_vector_concat((VectorLayout *)vector1, (VectorLayout *)vector2, sizeof(*vector1->mem)))
 #define VECTOR_FREE(vector) (_vector_free((VectorLayout *)vector))
@@ -101,13 +101,14 @@ VectorLayout *_vector_concat(VectorLayout *first, VectorLayout *second, size_t e
 VectorLayout *_vector_append(VectorLayout *vector, char *mem, size_t size, size_t el_size) {
     size_t newSize = vector->length + size;
     if(vector->capacity < newSize){
-        _vector_resize(vector, newSize, el_size);
+        _vector_resize(vector, newSize + (8*el_size), el_size);
     }
     size_t size1 = vector->length*el_size;
 
     for(size_t i = 0; i < size; ++i) {
         vector->mem[i+size1] = *(mem+i);
     }
+    vector->length = newSize;
     return vector;
 }
 
